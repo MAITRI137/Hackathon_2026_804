@@ -1,0 +1,142 @@
+/* ============================================================
+   PeoplePay360 — design tokens
+   Light-only system. Brand #2274A5, Accent #6DA2C2, gold warning.
+   Derived from the PeoplePay360 design reference, re-scaled onto a
+   4px spacing grid and a modular type scale for consistency.
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- brand ---- */
+  --brand: #2274a5;
+  --brand-hover: #1b5e87;
+  --brand-active: #17506f;
+  --brand-light: #e8f2f8;
+  --brand-50: #f2f8fc;
+  --brand-ring: rgba(34, 116, 165, 0.16);
+  --accent: #6da2c2;
+  --accent-light: #f0f6fa;
+
+  /* ---- semantic ---- */
+  --success: #0f7b3d;
+  --success-bg: #ecfdf3;
+  --success-border: #a7e8c4;
+  --warning: #a86a00;
+  --warning-strong: #d97706;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --danger: #c02626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fbcaca;
+  --info: var(--brand);
+  --info-bg: var(--brand-light);
+  --info-border: #b9d7e8;
+
+  /* Chart-only marks. --danger-mark is intentionally deeper than --danger:
+     #D97706 vs #DC2626 fail the normal-vision separation floor (ΔE 14.4 < 15)
+     when used as adjacent marks. This pair passes (ΔE 18.8). */
+  --mark-1: #2274a5;
+  --mark-2: #0f7b3d;
+  --mark-3: #d97706;
+  --mark-4: #b91c1c;
+  --mark-ramp-1: #2274a5;
+  --mark-ramp-2: #6da2c2;
+  --mark-ramp-3: #b7d3e4;
+
+  /* ---- surfaces ---- */
+  --bg: #f4f7f9;
+  --bg-gradient: radial-gradient(circle at 86% -12%, rgba(109, 162, 194, 0.16), transparent 38%);
+  --surface: #ffffff;
+  --surface-2: #f7fafc;
+  --surface-3: #eef3f7;
+  --surface-hover: #f5f9fb;
+  --surface-active: #eaf1f6;
+  --overlay: rgba(15, 30, 40, 0.34);
+
+  /* ---- ink & lines ---- */
+  --text: #16232c;
+  --text-secondary: #435663;
+  --text-muted: #6b8290;
+  --text-inverse: #ffffff;
+  --border: #e1e9ee;
+  --border-strong: #c6d5de;
+
+  /* ---- type ---- */
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Consolas, 'Liberation Mono',
+    monospace;
+  --fs-2xs: 0.6875rem; /* 11 */
+  --fs-xs: 0.75rem; /* 12 */
+  --fs-sm: 0.8125rem; /* 13 */
+  --fs-base: 0.875rem; /* 14 */
+  --fs-md: 0.9375rem; /* 15 */
+  --fs-lg: 1.0625rem; /* 17 */
+  --fs-xl: 1.25rem; /* 20 */
+  --fs-2xl: 1.5rem; /* 24 */
+  --fs-3xl: 1.875rem; /* 30 */
+  --lh-tight: 1.22;
+  --lh: 1.5;
+
+  /* ---- space (4px grid) ---- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 40px;
+  --s9: 48px;
+
+  /* ---- radius ---- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  /* ---- elevation ---- */
+  --sh-xs: 0 1px 2px rgba(16, 34, 44, 0.05);
+  --sh-sm: 0 1px 3px rgba(16, 34, 44, 0.07);
+  --sh: 0 4px 8px -2px rgba(16, 34, 44, 0.06), 0 2px 4px -2px rgba(16, 34, 44, 0.04);
+  --sh-md: 0 10px 18px -6px rgba(16, 34, 44, 0.1), 0 4px 8px -4px rgba(16, 34, 44, 0.05);
+  --sh-lg: 0 20px 30px -10px rgba(16, 34, 44, 0.12), 0 8px 12px -8px rgba(16, 34, 44, 0.06);
+  --sh-xl: 0 28px 56px -16px rgba(16, 34, 44, 0.2);
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 100ms;
+  --t: 150ms;
+  --t-med: 200ms;
+  --t-slow: 260ms;
+
+  /* ---- shell metrics ---- */
+  --sidebar-w: 244px;
+  --topbar-h: 56px;
+  --sidecar-w: 420px;
+  --page-max: 1320px;
+
+  /* pointer-aware control density; overridden for coarse pointers */
+  --control-h: 36px;
+  --control-h-sm: 30px;
+  --tap: 0px;
+}
+
+/* Coarse pointers get real hit areas without inflating glyphs. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 44px;
+    --control-h-sm: 40px;
+    --tap: 44px;
+  }
+}
+
+@media (max-width: 1439px) {
+  :root {
+    --sidecar-w: 380px;
+  }
+}

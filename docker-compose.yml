@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-peoplepay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-peoplepay}
+      POSTGRES_DB: ${POSTGRES_DB:-peoplepay}
+    ports:
+      - '5432:5432'
+    volumes:
+      - peoplepay360-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  app:
+    profiles: ['container-app']
+    build:
+      context: .
+    restart: unless-stopped
+    command: npm run dev:server
+    environment:
+      DATABASE_URL: postgresql://peoplepay:peoplepay@postgres:5432/peoplepay?schema=public
+      NODE_ENV: development
+      PORT: 3000
+      SESSION_SECRET: replace-this-local-development-session-secret
+      APP_ORIGIN: http://localhost:5173
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  peoplepay360-postgres:

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+server/src/generated/
+prototype/
+references/
+templates/
+checklists/
+plan/
+SKILL.md

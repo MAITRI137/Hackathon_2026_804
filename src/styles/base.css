@@ -1,0 +1,299 @@
+/* ============================================================
+   Base: reset, typography, focus, scroll, utilities
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: var(--lh);
+  color: var(--text);
+  background: var(--bg-gradient), var(--bg);
+  background-attachment: fixed;
+  min-height: 100dvh;
+  overflow: hidden; /* the app owns its own scroll containers */
+}
+
+#root {
+  height: 100dvh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background: var(--brand-light);
+  color: var(--brand-active);
+}
+
+/* thin, unobtrusive scrollbars on the app's own scroll regions */
+.scroll-y,
+.scroll-x {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.scroll-y {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-y::-webkit-scrollbar,
+.scroll-x::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.scroll-y::-webkit-scrollbar-thumb,
+.scroll-x::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---- typography helpers ---- */
+h1,
+h2,
+h3,
+h4 {
+  line-height: var(--lh-tight);
+  letter-spacing: -0.015em;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+.eyebrow {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.muted {
+  color: var(--text-muted);
+}
+.secondary {
+  color: var(--text-secondary);
+}
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ---- layout helpers ---- */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.row-t {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.between {
+  justify-content: space-between;
+}
+.wrap {
+  flex-wrap: wrap;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+.gap1 {
+  gap: var(--s1);
+}
+.gap3 {
+  gap: var(--s3);
+}
+.gap4 {
+  gap: var(--s4);
+}
+.gap5 {
+  gap: var(--s5);
+}
+.gap6 {
+  gap: var(--s6);
+}
+.mt2 {
+  margin-top: var(--s2);
+}
+.mt3 {
+  margin-top: var(--s3);
+}
+.mt4 {
+  margin-top: var(--s4);
+}
+.mt5 {
+  margin-top: var(--s5);
+}
+.mb2 {
+  margin-bottom: var(--s2);
+}
+.mb3 {
+  margin-bottom: var(--s3);
+}
+.mb4 {
+  margin-bottom: var(--s4);
+}
+.mb5 {
+  margin-bottom: var(--s5);
+}
+.full {
+  width: 100%;
+}
+
+/* Responsive split grids. Declared as classes (never inline styles) so
+   breakpoints can override them reliably. */
+.grid {
+  display: grid;
+  gap: var(--s4);
+}
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.split-main {
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+}
+.split-side {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
+}
+
+@media (max-width: 1100px) {
+  .split-main,
+  .split-side,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 780px) {
+  .grid-2,
+  .grid-3,
+  .grid-4,
+  .split-main,
+  .split-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grid {
+    gap: var(--s3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Responsive visibility helpers used by DataTable and dense views. */
+.mobile-only {
+  display: none;
+}
+@media (max-width: 767px) {
+  .mobile-only {
+    display: grid;
+  }
+  .desktop-only {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  .col-secondary {
+    display: none;
+  }
+}

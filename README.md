@@ -144,7 +144,7 @@ npm install
 cp .env.example .env            # PowerShell: Copy-Item .env.example .env
 npm run docker:up               # or point DATABASE_URL at any PostgreSQL 16
 npm run db:migrate
-npm run db:seed                 # ~3s → 5,009 records, prints the per-table totals
+npm run db:seed                 # ~3s → 5,115 records, prints the per-table totals
 npm run dev:server              # API on :3000
 npm run dev                     # app on :5173, proxies /api
 ```
@@ -171,7 +171,7 @@ Sign in with any seeded persona — the sign-in screen lists them and fills the 
 4. **Validate → Mark paid.** The stepper advances honestly and the report KPI relabels from _Estimated Net Payroll_ to _Total Net Salary Paid_.
 5. **Explain a payslip.** `₹11,000 ← HRA v2 ← BASIC × 20% ← BASIC ₹55,000 ← Contract CT-202`, with the contract opening in a sidecar.
 6. **Prove the boundary.** Switch to the Employee: own data only. Then `curl` another person's payroll and get `403`.
-7. **Watch it run.** Open the admin console: packets moving through the real request path, 5,009 records, live latency, busiest routes.
+7. **Watch it run.** Open the admin console: packets moving through the real request path, 5,115 records, live latency, busiest routes.
 8. **Degrade on purpose.** Break mail delivery: payslips fail into the outbox, payroll amounts are untouched.
 
 ---

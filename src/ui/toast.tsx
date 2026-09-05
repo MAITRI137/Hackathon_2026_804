@@ -2,7 +2,15 @@
  * Toasts confirm a completed mutation. A toast is never the mutation itself.
  * Undo is offered only where the action is genuinely reversible (X06).
  */
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Check, Info, XCircle } from 'lucide-react';
 
@@ -52,7 +60,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       success: (m, undo) => show(m, 'success', undo),
       error: (m) => show(m, 'error'),
       result: (r, undo) =>
-        r.ok ? show(r.message ?? 'Done', 'success', undo) : show(r.error ?? 'Something went wrong', 'error'),
+        r.ok
+          ? show(r.message ?? 'Done', 'success', undo)
+          : show(r.error ?? 'Something went wrong', 'error'),
     }),
     [show],
   );

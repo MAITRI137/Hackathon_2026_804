@@ -16,6 +16,7 @@ import { ROLE_LABEL, type Role } from '@shared/types';
 import { DEMO_PASSWORD, ROLE_EMAIL, signIn, type BootstrapPayload } from '@/lib/api';
 import { Button } from '@/ui/primitives';
 import { TextInput } from '@/ui/form';
+import { BrandMark } from '@/ui/BrandMark';
 
 const PERSONAS: { role: Role; name: string; blurb: string }[] = [
   { role: 'HR_PAYROLL_MANAGER', name: 'Maitri Shah', blurb: 'Runs payroll end to end' },
@@ -48,9 +49,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (payload: BootstrapPaylo
     <div className="login">
       <section className="login-pitch">
         <div className="login-brand">
-          <span className="brand-mark" aria-hidden>
-            P
-          </span>
+          <BrandMark size={40} />
           <div>
             <strong>PeoplePay360</strong>
             <span>HR &amp; Payroll Operating System</span>

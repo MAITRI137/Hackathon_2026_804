@@ -241,6 +241,7 @@ export function Metric({
   sub,
   icon: Icon,
   delta,
+  spark,
   why,
 }: {
   label: string;
@@ -250,6 +251,8 @@ export function Metric({
   icon?: LucideIcon;
   /** Period-over-period movement. `good` says which direction is favourable. */
   delta?: { percent: number; caption: string; good?: 'up' | 'down' | 'none' };
+  /** A small trend rendered inside the tile. */
+  spark?: ReactNode;
   /** An explicit, labelled control. The tile itself is never a hidden link. */
   why?: { onClick: () => void; label: string };
 }) {
@@ -286,6 +289,7 @@ export function Metric({
           <span className="muted">{delta.caption}</span>
         </div>
       )}
+      {spark && <div className="metric-spark">{spark}</div>}
       {sub && <div className="metric-sub">{sub}</div>}
       {why && (
         <span className="metric-why">

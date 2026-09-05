@@ -126,9 +126,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
-  padding: var(--s3) var(--s5);
+  padding: var(--s4) var(--s5);
   border-bottom: 1px solid var(--border);
-  min-height: 48px;
+  min-height: 52px;
 }
 .card-h h3 {
   font-size: var(--fs-md);
@@ -155,12 +155,30 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: var(--s4) var(--s5);
+  padding: var(--s4) var(--s5) var(--s5);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   position: relative;
   min-width: 0;
+  transition:
+    border-color var(--t-med) var(--ease),
+    box-shadow var(--t-med) var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .metric:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--sh-sm);
+  }
+}
+.metric-spark {
+  margin-top: var(--s2);
+}
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 26px;
+  overflow: visible;
 }
 .metric-v {
   font-size: var(--fs-2xl);
@@ -2275,4 +2293,28 @@ button.prov-node {
   gap: var(--s2);
   padding-top: var(--s3);
   border-top: 1px dashed var(--border);
+}
+
+/* ─── Day strip (attendance at a glance) ─────────────────── */
+.day-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.day-cell {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: transform var(--t) var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .day-cell:hover {
+    transform: translateY(-2px);
+  }
 }

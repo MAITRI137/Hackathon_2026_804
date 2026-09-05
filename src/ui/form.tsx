@@ -84,15 +84,29 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
 });
 
 /** Money input — decimal keypad on touch, tabular alignment, right-aligned. */
-export const MoneyInput = forwardRef<HTMLInputElement, TextInputProps>(function MoneyInput(props, ref) {
-  return <TextInput ref={ref} money inputMode="decimal" autoComplete="off" placeholder="0.00" {...props} />;
-});
+export const MoneyInput = forwardRef<HTMLInputElement, TextInputProps>(
+  function MoneyInput(props, ref) {
+    return (
+      <TextInput
+        ref={ref}
+        money
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="0.00"
+        {...props}
+      />
+    );
+  },
+);
 
-export const TextArea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & {
-  label?: ReactNode;
-  error?: string;
-  hint?: ReactNode;
-}>(function TextArea({ label, error, hint, required, id, ...rest }, ref) {
+export const TextArea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    label?: ReactNode;
+    error?: string;
+    hint?: ReactNode;
+  }
+>(function TextArea({ label, error, hint, required, id, ...rest }, ref) {
   const auto = useId();
   const inputId = id ?? auto;
   const el = (

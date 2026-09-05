@@ -84,7 +84,8 @@ export function DataTable<T>({
   );
 
   const pageIds = pageRows.map(rowKey);
-  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selection?.selected.has(id));
+  const allOnPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selection?.selected.has(id));
   const someOnPageSelected = pageIds.some((id) => selection?.selected.has(id));
 
   const toggleAllOnPage = (checked: boolean) => {
@@ -98,9 +99,7 @@ export function DataTable<T>({
   };
 
   const toggleSort = (key: string) => {
-    setSort((cur) =>
-      cur?.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: 1 },
-    );
+    setSort((cur) => (cur?.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
     setPage(1);
   };
 
@@ -149,9 +148,14 @@ export function DataTable<T>({
                 return (
                   <th
                     key={col.key}
-                    style={{ width: col.width, textAlign: col.align === 'right' ? 'right' : undefined }}
+                    style={{
+                      width: col.width,
+                      textAlign: col.align === 'right' ? 'right' : undefined,
+                    }}
                     className={clsx(col.secondary && 'col-secondary')}
-                    aria-sort={col.sortValue ? (ariaSort as 'ascending' | 'descending' | 'none') : undefined}
+                    aria-sort={
+                      col.sortValue ? (ariaSort as 'ascending' | 'descending' | 'none') : undefined
+                    }
                   >
                     {col.sortValue ? (
                       <button
@@ -210,8 +214,16 @@ export function DataTable<T>({
                         col.align === 'right' && 'cell-num',
                         col.secondary && 'col-secondary',
                       )}
-                      onClick={col.key === 'actions' ? undefined : onRowClick ? () => onRowClick(row) : undefined}
-                      style={onRowClick && col.key !== 'actions' ? { cursor: 'pointer' } : undefined}
+                      onClick={
+                        col.key === 'actions'
+                          ? undefined
+                          : onRowClick
+                            ? () => onRowClick(row)
+                            : undefined
+                      }
+                      style={
+                        onRowClick && col.key !== 'actions' ? { cursor: 'pointer' } : undefined
+                      }
                     >
                       {col.render(row)}
                     </td>
@@ -226,7 +238,8 @@ export function DataTable<T>({
       {sorted.length > pageSize && (
         <nav className="pagination" aria-label="Pagination">
           <span>
-            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} of {sorted.length}
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} of{' '}
+            {sorted.length}
           </span>
           <div className="page-btns">
             <button

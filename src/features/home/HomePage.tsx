@@ -43,12 +43,14 @@ import {
   workedDaysThisPeriod,
 } from '@/store/selectors';
 import { netLabel } from '@/store/payroll';
+import { addMoney, money } from '@shared/money';
+import { netTrend, headcountByDepartment, payslipsOf } from '@/store/selectors';
 import { checkIn, checkOut } from '@/store/actions';
 import { Page } from '@/app/Page';
 import { useAppActions } from '@/app/actions-context';
 import { Avatar, Banner, Button, Card, Chip, EmptyState, Metric } from '@/ui/primitives';
 import { Ring, Timeline } from '@/ui/feedback';
-import { HBars } from '@/ui/charts';
+import { BarChart, DonutChart, HBars, LineChart, Sparkline } from '@/ui/charts';
 import { useToast } from '@/ui/toast';
 
 export function HomePage() {
@@ -61,6 +63,34 @@ export function HomePage() {
 }
 
 /* ── Next best action card, shared ─────────────────────────── */
+
+/** Gross broken down by the rule that produced it, for the whole run. */
+function usePayComposition(payrunId: string) {
+  const state = useStore();
+  return useMemo(() => {
+    const byRule = new Map<string, { name: string; total: ReturnType<typeof money> }>();
+    for (const slip of payslipsOf(state, payrunId)) {
+      if (slip.isDuplicate) continue;
+      for (const line of slip.lines) {
+        if (line.category === 'GROSS' || line.category === 'NET') continue;
+        const entry = byRule.get(line.ruleCode) ?? { name: line.ruleName, total: money(0) };
+        entry.total = addMoney(entry.total, line.amount);
+        byRule.set(line.ruleCode, entry);
+      }
+    }
+    const palette = ['var(--mark-1)', 'var(--mark-2)', 'var(--mark-3)', 'var(--mark-4)'];
+    return [...byRule.entries()]
+      .filter(([, v]) => !v.total.isZero())
+      .sort((a, b) => b[1].total.comparedTo(a[1].total))
+      .map(([code, v], i) => ({
+        id: code,
+        label: v.name,
+        value: v.total.toNumber(),
+        display: formatMoneyShort(v.total),
+        color: palette[i % palette.length],
+      }));
+  }, [state, payrunId]);
+}
 
 function NbaCard() {
   const state = useStore();
@@ -113,6 +143,31 @@ function PayrollHome() {
   const totals = useMemo(() => totalsFor(state, payrun.id), [state, payrun.id]);
   const blocking = exceptions.filter((e) => e.blocking);
   const approvals = approvalItems(state);
+  const trend = useMemo(() => netTrend(state), [state]);
+  const composition = usePayComposition(payrun.id);
+  const deptCost = useMemo(() => {
+    const rows = state.departments
+      .map((d) => {
+        const total = payslipsOf(state, payrun.id)
+          .filter((p) => !p.isDuplicate && empById(state, p.employeeId)?.departmentId === d.id)
+          .reduce((acc, p) => addMoney(acc, p.net), money(0));
+        return {
+          id: d.id,
+          label: d.name,
+          value: total.toNumber(),
+          display: formatMoneyShort(total),
+        };
+      })
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const max = rows[0]?.value ?? 1;
+    return rows.slice(0, 6).map((r) => ({
+      id: r.id,
+      label: r.label,
+      percent: (r.value / max) * 100,
+      caption: r.display,
+    }));
+  }, [state, payrun.id]);
 
   return (
     <Page title="Payroll operations" crumbs={['Overview']}>
@@ -164,7 +219,12 @@ function PayrollHome() {
 
       <div className="grid grid-4">
         <Metric label="Employees in run" value={totals.count} icon={Users} />
-        <Metric label="Gross" value={formatMoneyShort(totals.gross)} tone="brand" sub={formatMoney(totals.gross)} />
+        <Metric
+          label="Gross"
+          value={formatMoneyShort(totals.gross)}
+          tone="brand"
+          sub={formatMoney(totals.gross)}
+        />
         <Metric label="Deductions" value={formatMoneyShort(totals.deductions)} tone="warning" />
         <Metric
           label={netLabel(payrun.status)}
@@ -172,7 +232,39 @@ function PayrollHome() {
           tone="success"
           icon={BadgeIndianRupee}
           sub={formatMoney(totals.net)}
+          spark={
+            trend.length > 1 ? (
+              <Sparkline
+                values={trend.map((t) => Number(t.value))}
+                label={`Net payroll across ${trend.length} periods`}
+                tone="success"
+              />
+            ) : undefined
+          }
         />
+      </div>
+
+      <div className="grid split-side">
+        <Card
+          title="Where the money goes"
+          subtitle={`${monthLabel(payrun.periodStart)} gross, by salary rule`}
+          padding="tight"
+        >
+          <DonutChart
+            data={composition}
+            total={formatMoneyShort(totals.gross)}
+            totalLabel="Gross"
+            unit="payroll"
+          />
+        </Card>
+
+        <Card title="Cost by department" subtitle="Largest first" padding="tight">
+          {deptCost.length === 0 ? (
+            <EmptyState icon={Users} title="Nothing computed yet" />
+          ) : (
+            <HBars rows={deptCost} />
+          )}
+        </Card>
       </div>
 
       <div className="grid split-side">
@@ -272,7 +364,9 @@ function HrHome() {
             </div>
             <div className="row between">
               <span className="muted">Open check-ins</span>
-              <Chip tone={openCheckouts.length ? 'warning' : 'success'}>{openCheckouts.length}</Chip>
+              <Chip tone={openCheckouts.length ? 'warning' : 'success'}>
+                {openCheckouts.length}
+              </Chip>
             </div>
             <div className="row between">
               <span className="muted">Contracts expiring soon</span>
@@ -289,11 +383,18 @@ function HrHome() {
       <div className="grid grid-4">
         <Metric
           label="Active employees"
-          value={state.employees.filter((e) => e.status === 'ACTIVE' || e.status === 'PROBATION').length}
+          value={
+            state.employees.filter((e) => e.status === 'ACTIVE' || e.status === 'PROBATION').length
+          }
           icon={Users}
           tone="brand"
         />
-        <Metric label="Pending approvals" value={approvals.length} icon={Inbox} tone={approvals.length ? 'warning' : undefined} />
+        <Metric
+          label="Pending approvals"
+          value={approvals.length}
+          icon={Inbox}
+          tone={approvals.length ? 'warning' : undefined}
+        />
         <Metric label="Departments" value={state.departments.length} />
         <Metric
           label="On leave this month"
@@ -321,7 +422,12 @@ function HrHome() {
           ) : (
             <div className="col gap2">
               {missingBank.slice(0, 3).map((e) => (
-                <Link className="row gap3" to={`/employees/${e.id}`} key={e.id} style={{ color: 'inherit' }}>
+                <Link
+                  className="row gap3"
+                  to={`/employees/${e.id}`}
+                  key={e.id}
+                  style={{ color: 'inherit' }}
+                >
                   <Avatar initials={e.initials} size="sm" tone="warning" />
                   <div className="grow truncate">
                     <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)' }}>{e.fullName}</div>
@@ -334,7 +440,12 @@ function HrHome() {
               {expiring.slice(0, 3).map((c) => {
                 const e = empById(state, c.employeeId);
                 return (
-                  <Link className="row gap3" to="/contracts" key={c.id} style={{ color: 'inherit' }}>
+                  <Link
+                    className="row gap3"
+                    to="/contracts"
+                    key={c.id}
+                    style={{ color: 'inherit' }}
+                  >
                     <Avatar initials={e?.initials ?? '??'} size="sm" tone="warning" />
                     <div className="grow truncate">
                       <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)' }}>{e?.fullName}</div>
@@ -351,6 +462,41 @@ function HrHome() {
 
         <RecentActivity limit={5} />
       </div>
+
+      <div className="grid split-side">
+        <Card title="Headcount by department" subtitle="Active and probation" padding="tight">
+          <BarChart
+            data={headcountByDepartment(state, {
+              payrunId: state.activePayrunId,
+              departmentId: 'ALL',
+              employeeType: 'ALL',
+            })}
+            unit="employees"
+          />
+        </Card>
+
+        <Card title="What is waiting on you" subtitle="Approvals by kind" padding="tight">
+          {approvals.length === 0 ? (
+            <EmptyState icon={CircleCheck} title="Inbox is clear" />
+          ) : (
+            <DonutChart
+              data={[
+                { id: 'LEAVE', label: 'Leave requests', color: 'var(--mark-1)' },
+                { id: 'PROFILE', label: 'Profile changes', color: 'var(--mark-2)' },
+                { id: 'SALARY', label: 'Salary revisions', color: 'var(--mark-3)' },
+              ]
+                .map((k) => ({
+                  ...k,
+                  value: approvals.filter((a) => a.type === k.id).length,
+                }))
+                .filter((k) => k.value > 0)}
+              total={String(approvals.length)}
+              totalLabel="Waiting"
+              unit="requests"
+            />
+          )}
+        </Card>
+      </div>
     </Page>
   );
 }
@@ -366,7 +512,9 @@ function EmployeeHome() {
   const [busy, setBusy] = useState(false);
 
   const open = state.attendance.find((a) => a.employeeId === me.id && a.checkIn && !a.checkOut);
-  const todayRecord = state.attendance.find((a) => a.employeeId === me.id && a.date === state.today);
+  const todayRecord = state.attendance.find(
+    (a) => a.employeeId === me.id && a.date === state.today,
+  );
   const shift = nextShift(state, me);
   const worked = workedDaysThisPeriod(state, me.id, payrun);
   const contract = currentContract(state, me.id);
@@ -376,7 +524,9 @@ function EmployeeHome() {
     .filter((p) => p.employeeId === me.id && !p.isDuplicate)
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
   const latest = myPayslips[0];
-  const myPending = state.leaveRequests.filter((r) => r.employeeId === me.id && r.status === 'PENDING');
+  const myPending = state.leaveRequests.filter(
+    (r) => r.employeeId === me.id && r.status === 'PENDING',
+  );
 
   return (
     <Page title={`Welcome, ${me.firstName}`} crumbs={['My workspace']}>
@@ -437,7 +587,13 @@ function EmployeeHome() {
       </div>
 
       <div className="grid grid-4">
-        <Metric label="Annual leave left" value={annual.remaining} tone="brand" icon={CalendarOff} sub={`of ${annual.allocated} days`} />
+        <Metric
+          label="Annual leave left"
+          value={annual.remaining}
+          tone="brand"
+          icon={CalendarOff}
+          sub={`of ${annual.allocated} days`}
+        />
         <Metric label="Sick leave left" value={sick.remaining} sub={`of ${sick.allocated} days`} />
         <Metric
           label={`Days worked in ${monthLabel(payrun.periodStart).split(' ')[0]}`}
@@ -499,6 +655,32 @@ function EmployeeHome() {
           )}
         </Card>
 
+        <Card title="My last two weeks" subtitle="Each square is a scheduled day" padding="tight">
+          <AttendanceStrip employeeId={me.id} />
+        </Card>
+      </div>
+
+      <div className="grid split-side">
+        <Card title="My net pay" subtitle="Every period computed for me" padding="tight">
+          {myPayslips.length > 1 ? (
+            <LineChart
+              data={[...myPayslips].reverse().map((p) => ({
+                id: p.id,
+                label: monthLabel(p.periodStart).split(' ')[0],
+                value: Number(p.net),
+                display: formatMoney(p.net),
+              }))}
+              unit="net pay"
+            />
+          ) : (
+            <EmptyState
+              icon={Receipt}
+              title="Not enough history yet"
+              description="A trend needs at least two payslips."
+            />
+          )}
+        </Card>
+
         <Card title="Quick actions" padding="tight">
           <div className="col gap2">
             <Button block icon={CalendarOff} onClick={() => actions.run('request-leave')}>
@@ -524,6 +706,69 @@ function EmployeeHome() {
         </Card>
       </div>
     </Page>
+  );
+}
+
+/**
+ * The last fourteen scheduled days at a glance. Status is carried by colour
+ * *and* by the label in each square's tooltip and accessible name, so the
+ * reading never depends on colour alone.
+ */
+function AttendanceStrip({ employeeId }: { employeeId: string }) {
+  const state = useStore();
+
+  const days = useMemo(() => {
+    const own = state.attendance
+      .filter((a) => a.employeeId === employeeId && a.date <= state.today)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-14);
+    return own;
+  }, [state.attendance, employeeId, state.today]);
+
+  if (days.length === 0) {
+    return <EmptyState icon={Clock} title="No attendance recorded yet" />;
+  }
+
+  const tone = (status: string) =>
+    status === 'PRESENT'
+      ? { bg: 'var(--success-bg)', fg: 'var(--success)', label: 'On time' }
+      : status === 'LATE'
+        ? { bg: 'var(--warning-bg)', fg: 'var(--warning)', label: 'Late' }
+        : status === 'OVERTIME'
+          ? { bg: 'var(--brand-light)', fg: 'var(--brand)', label: 'Overtime' }
+          : status === 'MISSING_CHECKOUT'
+            ? { bg: 'var(--danger-bg)', fg: 'var(--danger)', label: 'No checkout' }
+            : { bg: 'var(--surface-3)', fg: 'var(--text-muted)', label: 'Absent' };
+
+  const present = days.filter((d) => d.status === 'PRESENT' || d.status === 'OVERTIME').length;
+
+  return (
+    <div className="col gap3">
+      <div className="day-strip">
+        {days.map((d) => {
+          const t = tone(d.status);
+          return (
+            <span
+              key={d.id}
+              className="day-cell"
+              style={{ background: t.bg, color: t.fg }}
+              title={`${formatDate(d.date)} · ${t.label}${d.checkIn ? ` · in ${d.checkIn}` : ''}${d.checkOut ? ` · out ${d.checkOut}` : ''}`}
+              aria-label={`${formatDate(d.date)}: ${t.label}`}
+            >
+              {Number(d.date.slice(-2))}
+            </span>
+          );
+        })}
+      </div>
+      <div className="row between" style={{ fontSize: 'var(--fs-sm)' }}>
+        <span className="muted">
+          {present} of {days.length} days worked
+        </span>
+        <Link to="/attendance" style={{ fontSize: 'var(--fs-sm)' }}>
+          Open attendance →
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -570,7 +815,11 @@ function AdminHome() {
         <Metric label="Users" value={state.users.length} icon={Users} tone="brand" />
         <Metric label="Employees" value={state.employees.length} icon={Users} />
         <Metric label="Audit events" value={state.audit.length} icon={ShieldCheck} />
-        <Metric label={netLabel(payrun.status)} value={formatMoneyShort(totals.net)} tone="success" />
+        <Metric
+          label={netLabel(payrun.status)}
+          value={formatMoneyShort(totals.net)}
+          tone="success"
+        />
       </div>
 
       <div className="grid split-side">

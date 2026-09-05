@@ -105,9 +105,19 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       where: canReadSalary ? {} : { structureId: { in: ownStructureIds ?? [] } },
       orderBy: [{ sequence: 'asc' }, { code: 'asc' }],
     }),
-    canReadPayruns
-      ? prisma.payrun.findMany({ include: { employees: true }, orderBy: { periodStart: 'asc' } })
-      : prisma.payrun.findMany({ where: { id: '__none__' }, include: { employees: true } }),
+    // A period is not confidential; what it paid other people is. Callers
+    // without payrun administration receive every payrun they themselves were
+    // part of, with the membership list scoped to them alone — enough to see
+    // their own pay history, and nothing about anyone else's.
+    prisma.payrun.findMany({
+      where: canReadPayruns
+        ? {}
+        : { employees: { some: { employeeId: user.employeeId ?? '__none__' } } },
+      include: {
+        employees: canReadPayruns ? true : { where: { employeeId: user.employeeId ?? '__none__' } },
+      },
+      orderBy: { periodStart: 'asc' },
+    }),
     prisma.payslip.findMany({
       where: canReadAllPayslips ? {} : { employeeId: user.employeeId ?? '__none__' },
       include: { lines: { orderBy: { sequence: 'asc' } } },

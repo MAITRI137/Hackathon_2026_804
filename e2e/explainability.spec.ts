@@ -13,7 +13,10 @@ async function signIn(page: Page, persona: string) {
 test('every payslip line can be explained back to its source', async ({ page }) => {
   await signIn(page, 'HR Payroll Manager');
   await page.goto('/#/payslips');
-  await page.getByRole('button', { name: /^Open$/ }).first().click();
+  await page
+    .getByRole('button', { name: /^Open$/ })
+    .first()
+    .click();
   await expect(page.getByRole('heading', { name: /payslip$/i })).toBeVisible();
 
   // Each line carries its own Why? control.
@@ -32,7 +35,10 @@ test('every payslip line can be explained back to its source', async ({ page }) 
 test('the salary change explanation reconciles to the net difference', async ({ page }) => {
   await signIn(page, 'HR Payroll Manager');
   await page.goto('/#/payslips');
-  await page.getByRole('button', { name: /^Open$/ }).first().click();
+  await page
+    .getByRole('button', { name: /^Open$/ })
+    .first()
+    .click();
 
   await expect(page.getByRole('heading', { name: /payslip$/i })).toBeVisible();
   const change = page.getByRole('button', { name: /Why did salary change/i }).first();

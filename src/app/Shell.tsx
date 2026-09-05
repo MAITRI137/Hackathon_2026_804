@@ -31,6 +31,7 @@ import { hydrateFromServer } from '@/store/store';
 import { Avatar, Button } from '@/ui/primitives';
 import { SidecarHost, useLayer } from '@/ui/overlays';
 import { useToast } from '@/ui/toast';
+import { BrandMark } from '@/ui/BrandMark';
 import { isExactMatch, labelFor, navFor } from './nav';
 import { CommandLauncher } from './CommandLauncher';
 import { useAppActions } from './actions-context';
@@ -125,9 +126,7 @@ export function Shell() {
         aria-label="Primary navigation"
       >
         <div className="app-brand">
-          <span className="brand-mark" aria-hidden>
-            P
-          </span>
+          <BrandMark size={30} />
           <span className="brand-text">
             <strong>PeoplePay360</strong>
             <span>HR &amp; Payroll OS</span>

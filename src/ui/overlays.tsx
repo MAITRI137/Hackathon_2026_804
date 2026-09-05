@@ -192,7 +192,13 @@ export function Modal({
                 {eyebrow && <div className="eyebrow">{eyebrow}</div>}
                 <h3 id={titleId}>{title}</h3>
               </div>
-              <Button variant="ghost" iconOnly icon={X} onClick={onClose} aria-label="Close dialog" />
+              <Button
+                variant="ghost"
+                iconOnly
+                icon={X}
+                onClick={onClose}
+                aria-label="Close dialog"
+              />
             </div>
           </header>
           <div className="modal-b">{children}</div>
@@ -229,7 +235,13 @@ export function Drawer({
     <>
       <div className="scrim" onClick={onClose} aria-hidden />
       <div className="drawer-layer">
-        <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref}>
+        <aside
+          className="drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          ref={ref}
+        >
           <header className="drawer-h">
             <h3 id={titleId}>{title}</h3>
             <Button variant="ghost" iconOnly icon={X} onClick={onClose} aria-label="Close panel" />
@@ -313,11 +325,17 @@ export function SidecarHost() {
   const { state, close } = useSidecar();
   useLayer('sidecar', Boolean(state), close);
   const titleId = useId();
-  const isNarrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 1099px)').matches;
+  const isNarrow =
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1099px)').matches;
   if (!state) return null;
 
   const panel = (
-    <aside className="sidecar" role="dialog" aria-labelledby={titleId} aria-modal={isNarrow || undefined}>
+    <aside
+      className="sidecar"
+      role="dialog"
+      aria-labelledby={titleId}
+      aria-modal={isNarrow || undefined}
+    >
       <header className="sidecar-h">
         <h3 id={titleId}>{state.title}</h3>
         <Button variant="ghost" iconOnly icon={X} onClick={close} aria-label="Close details" />

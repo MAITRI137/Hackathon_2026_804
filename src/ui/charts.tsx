@@ -463,3 +463,62 @@ export function DonutChart({
     </div>
   );
 }
+
+/* ── Sparkline ─────────────────────────────────────────────── */
+
+/**
+ * A trend at tile size. It carries no axis, so it says "direction", never
+ * "how much" — the number beside it does that. Fitted to its own range, since
+ * a zero baseline would flatten every real movement at this height.
+ */
+export function Sparkline({
+  values,
+  label,
+  tone = 'brand',
+}: {
+  values: number[];
+  label: string;
+  tone?: 'brand' | 'success' | 'warning' | 'danger';
+}) {
+  if (values.length < 2) return null;
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const span = hi - lo || 1;
+  const W = 100;
+  const H = 26;
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) => H - 3 - ((v - lo) / span) * (H - 6);
+  const path = values
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+    .join(' ');
+  const stroke =
+    tone === 'success'
+      ? 'var(--success)'
+      : tone === 'warning'
+        ? 'var(--warning-strong)'
+        : tone === 'danger'
+          ? 'var(--danger)'
+          : 'var(--mark-1)';
+
+  return (
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={label}
+    >
+      <path d={`${path} L${W},${H} L0,${H} Z`} fill={stroke} opacity=".08" />
+      <path
+        d={path}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.6"
+        vectorEffect="non-scaling-stroke"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r="2" fill={stroke} />
+    </svg>
+  );
+}

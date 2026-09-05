@@ -92,9 +92,9 @@ export function Shell() {
       try {
         const payload = await connectDemoRole(next);
         hydrateFromServer(payload);
-        if (next === 'HR_PAYROLL_USER' || next === 'HR_PAYROLL_MANAGER' || next === 'ADMIN') {
-          bootstrapPayroll();
-        }
+        // Every role computes payroll for what it is allowed to see: an
+        // employee gets their own payslip, a payroll role gets the whole run.
+        bootstrapPayroll();
         setRoleMenu(false);
         navigate('/');
         toast.show(`Now securely signed in as ${ROLE_LABEL[next]}`, 'success');

@@ -40,6 +40,16 @@ describe('role-scoped bootstrap', () => {
     const response = await agent.get('/api/bootstrap').expect(200);
 
     expect(response.body.data.employees).toHaveLength(1);
+    // Entitled to the rules that compute their own pay...
+    expect(response.body.data.salaryRules.length).toBeGreaterThan(0);
+    // ...but never to anyone else's payroll.
+    expect(response.body.data.payruns).toHaveLength(0);
+    for (const slip of response.body.data.payslips) {
+      expect(slip.employeeId).toBe('EMP-001');
+    }
+    for (const contract of response.body.data.contracts) {
+      expect(contract.employeeId).toBe('EMP-001');
+    }
     expect(response.body.data.employees[0].id).toBe('EMP-001');
     expect(
       response.body.data.contracts.every(
@@ -52,18 +62,34 @@ describe('role-scoped bootstrap', () => {
         (item: { employeeId: string }) => item.employeeId === 'EMP-001',
       ),
     ).toBe(true);
-    expect(response.body.data.salaryRules).toEqual([]);
+    // A person may see the rules that computed their own pay — that is the
+    // payslip explanation — and exactly one structure: their own.
+    expect(response.body.data.salaryStructures).toHaveLength(1);
+    expect(response.body.data.salaryRules.length).toBeGreaterThan(0);
+    // But no payrun administration and no audit trail.
     expect(response.body.data.payruns).toEqual([]);
     expect(response.body.data.audit).toEqual([]);
   });
 
-  it('does not expose payroll configuration or payruns to HR managers', async () => {
+  it('does not expose payrun administration or org payroll to HR managers', async () => {
     const agent = await signedInAgent('priya.desai@peoplepay360.com');
     const response = await agent.get('/api/bootstrap').expect(200);
 
+    // HR Managers run people operations across the whole organisation…
     expect(response.body.data.employees.length).toBeGreaterThanOrEqual(42);
-    expect(response.body.data.salaryStructures).toEqual([]);
-    expect(response.body.data.salaryRules).toEqual([]);
+
+    // …but administer no payroll and see no one else's pay. Rule definitions
+    // for their own structure are not confidential — they are printed on their
+    // own payslip — so the boundary that matters is amounts, not policy.
     expect(response.body.data.payruns).toEqual([]);
+    expect(response.body.data.salaryStructures.length).toBeLessThanOrEqual(1);
+    for (const slip of response.body.data.payslips) {
+      expect(slip.employeeId).toBe('EMP-007');
+    }
+  });
+
+  it('refuses payroll and operations endpoints to an HR manager outright', async () => {
+    const agent = await signedInAgent('priya.desai@peoplepay360.com');
+    await agent.get('/api/ops/metrics').expect(403);
   });
 });

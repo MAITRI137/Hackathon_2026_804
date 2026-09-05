@@ -286,21 +286,3 @@ h4 {
     scroll-behavior: auto !important;
   }
 }
-
-/* Responsive visibility helpers used by DataTable and dense views. */
-.mobile-only {
-  display: none;
-}
-@media (max-width: 767px) {
-  .mobile-only {
-    display: grid;
-  }
-  .desktop-only {
-    display: none;
-  }
-}
-@media (max-width: 1023px) {
-  .col-secondary {
-    display: none;
-  }
-}

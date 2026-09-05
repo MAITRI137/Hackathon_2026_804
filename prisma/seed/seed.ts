@@ -212,11 +212,14 @@ async function seedPayrunsAndEvidence() {
       version: payrun.version,
     })),
   });
-  // Every payrun covers the whole organisation, so payroll totals, readiness
-  // and reports are computed against all 5,000 people rather than a sample.
-  const everyone = scale.allEmployeeIds;
+  // Every payrun covers the whole organisation as it stood in that period.
+  // Someone who had not joined yet is not payable for it — including them
+  // would both overstate payroll and pay a person before their start date.
   for (const payrun of demo.payruns) {
-    await createInChunks(`payrun ${payrun.id} members`, everyone, (batch) =>
+    const members = scale.allEmployeeIds.filter(
+      (employeeId) => (scale.joinDates[employeeId] ?? '9999-12-31') <= payrun.periodEnd,
+    );
+    await createInChunks(`payrun ${payrun.id} members`, members, (batch) =>
       prisma.payrunEmployee.createMany({
         data: batch.map((employeeId) => ({ payrunId: payrun.id, employeeId })),
       }),
@@ -311,6 +314,15 @@ async function seedScaleWorkforce() {
       })),
     }),
   );
+
+  // Budget = the department's wage bill plus allowances, with 6% headroom.
+  for (const [departmentId, wageBill] of Object.entries(scale.departmentWageBill)) {
+    const budget = Math.round(wageBill * 1.2 * 1.06);
+    await prisma.department.update({
+      where: { id: departmentId },
+      data: { monthlyBudget: budget.toFixed(2) },
+    });
+  }
 
   await createInChunks('leave requests', scale.leaveRequests, (batch) =>
     prisma.leaveRequest.createMany({

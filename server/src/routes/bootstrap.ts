@@ -34,6 +34,20 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
   const canReadAllPayslips = roleHasPermission(user.role, 'payslip.read.all');
   const canReadAudit = roleHasPermission(user.role, 'audit.read');
 
+  // A person is entitled to the rules that computed their own pay — that is
+  // what the payslip explanation shows them line by line. Callers without
+  // salary-configuration access therefore receive the rules for the structures
+  // their own contracts reference, and nothing else.
+  const ownStructureIds = canReadSalary
+    ? undefined
+    : (
+        await prisma.contract.findMany({
+          where: { employeeId: user.employeeId ?? '__none__' },
+          select: { salaryStructureId: true },
+          distinct: ['salaryStructureId'],
+        })
+      ).map((row) => row.salaryStructureId);
+
   const [
     departments,
     jobPositions,
@@ -83,12 +97,14 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       take: user.role === 'EMPLOYEE' ? 50 : ALLOCATION_WORKING_SET,
     }),
     prisma.leaveRequest.findMany({ where: selfWhere, orderBy: { createdAt: 'desc' } }),
-    canReadSalary
-      ? prisma.salaryStructure.findMany({ orderBy: { name: 'asc' } })
-      : prisma.salaryStructure.findMany({ where: { id: '__none__' } }),
-    canReadSalary
-      ? prisma.salaryRule.findMany({ orderBy: [{ sequence: 'asc' }, { code: 'asc' }] })
-      : prisma.salaryRule.findMany({ where: { id: '__none__' } }),
+    prisma.salaryStructure.findMany({
+      where: canReadSalary ? {} : { id: { in: ownStructureIds ?? [] } },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.salaryRule.findMany({
+      where: canReadSalary ? {} : { structureId: { in: ownStructureIds ?? [] } },
+      orderBy: [{ sequence: 'asc' }, { code: 'asc' }],
+    }),
     canReadPayruns
       ? prisma.payrun.findMany({ include: { employees: true }, orderBy: { periodStart: 'asc' } })
       : prisma.payrun.findMany({ where: { id: '__none__' }, include: { employees: true } }),

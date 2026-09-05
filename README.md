@@ -7,7 +7,7 @@
 
 |                  |                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------ |
-| **Dataset**      | 5,009 persisted records across 19 tables · 287 employees · seeded deterministically in ~3s       |
+| **Dataset**      | 5,115 persisted records across 19 tables · 297 employees · seeded deterministically in ~3s       |
 | **Correctness**  | `NUMERIC(18,2)` in the database, `decimal.js` in the engine, zero binary float in the money path |
 | **Security**     | Argon2id, HttpOnly server sessions, origin-checked writes, one server-side permission matrix     |
 | **Verification** | 14 integration tests · 5 real-browser journeys · lint, typecheck and production build green      |
@@ -98,7 +98,7 @@ flowchart LR
   C["Browser clients<br/>records loaded"] --> A["Express API<br/>req/s · p95"]
   A --> E["Payroll engine<br/>decimal · ordered rules"]
   E --> P["Prisma<br/>rows/s"]
-  P --> D[("PostgreSQL<br/>5,009 records · 19 tables")]
+  P --> D[("PostgreSQL<br/>5,115 records · 19 tables")]
 ```
 
 Everything on it is measured, never simulated, and the payload is deliberately anonymous — it answers _what is the system doing_, never _what is this person doing_. One canvas, one animation frame loop, data read from a ref: React never re-renders per frame, so the console cannot become the load it is measuring.

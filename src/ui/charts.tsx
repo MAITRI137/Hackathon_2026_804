@@ -68,7 +68,11 @@ export function BarChart({
   if (data.length === 0 || data.every((d) => d.value === 0)) {
     return (
       <>
-        <EmptyState icon={BarChart3} title={emptyLabel} description="Adjust the filters to see values here." />
+        <EmptyState
+          icon={BarChart3}
+          title={emptyLabel}
+          description="Adjust the filters to see values here."
+        />
         {data.length > 0 && <AccessibleTable data={data} unit={unit} />}
       </>
     );
@@ -150,7 +154,11 @@ export function GroupedBarChart({
     <div className="chart">
       <div className="chart-plot" onMouseLeave={() => setActive(null)}>
         {data.map((d) => (
-          <div className="chart-col" key={d.id} style={{ gap: 2, display: 'flex', alignItems: 'flex-end' }}>
+          <div
+            className="chart-col"
+            key={d.id}
+            style={{ gap: 2, display: 'flex', alignItems: 'flex-end' }}
+          >
             {(
               [
                 { k: 'a', v: d.a, disp: d.aDisplay, name: seriesA, color: 'var(--mark-ramp-2)' },
@@ -247,14 +255,30 @@ export function LineChart({ data, unit }: { data: Datum[]; unit: string }) {
     );
   }
 
-  const max = niceMax(Math.max(...data.map((d) => d.value)));
+  // A trend of large, similar values says nothing against a zero baseline: a
+  // 4% move becomes two pixels. Bars must start at zero, but a line may use a
+  // fitted range — provided the range is stated, which it is, below the plot.
+  const values = data.map((d) => d.value);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const spread = rawMax - rawMin;
+  const pad = spread === 0 ? Math.max(1, rawMax * 0.05) : spread * 0.35;
+  const lo = Math.max(0, rawMin - pad);
+  const hi = rawMax + pad;
+  const span = hi - lo || 1;
+  const fitted = lo > 0;
+
   const W = 100;
   const H = 40;
-  const pad = 3;
-  const x = (i: number) => pad + (i / (data.length - 1)) * (W - pad * 2);
-  const y = (v: number) => H - pad - (v / max) * (H - pad * 2);
-  const path = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(2)},${y(d.value).toFixed(2)}`).join(' ');
-  const area = `${path} L${x(data.length - 1).toFixed(2)},${H - pad} L${x(0).toFixed(2)},${H - pad} Z`;
+  const padY = 4;
+  const x = (i: number) => 3 + (i / (data.length - 1)) * (W - 6);
+  const y = (v: number) => H - padY - ((v - lo) / span) * (H - padY * 2);
+  const path = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(2)},${y(d.value).toFixed(2)}`)
+    .join(' ');
+  const area = `${path} L${x(data.length - 1).toFixed(2)},${H - padY} L${x(0).toFixed(2)},${H - padY} Z`;
+  const loLabel = data.find((d) => d.value === rawMin);
+  const hiLabel = data.find((d) => d.value === rawMax);
 
   return (
     <div className="chart">
@@ -266,7 +290,13 @@ export function LineChart({ data, unit }: { data: Datum[]; unit: string }) {
         aria-labelledby={labelId}
       >
         <path d={area} fill="var(--brand-light)" stroke="none" />
-        <path d={path} fill="none" stroke="var(--mark-1)" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--mark-1)"
+          strokeWidth="0.8"
+          vectorEffect="non-scaling-stroke"
+        />
         {data.map((d, i) => (
           <circle
             key={d.id}
@@ -303,9 +333,15 @@ export function LineChart({ data, unit }: { data: Datum[]; unit: string }) {
           </button>
         ))}
       </div>
-      {active !== null && (
+      {active !== null ? (
         <p style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, textAlign: 'center' }}>
           {data[active].label}: {data[active].display ?? data[active].value} {unit}
+        </p>
+      ) : (
+        <p className="muted" style={{ fontSize: 'var(--fs-xs)', textAlign: 'center' }}>
+          {fitted ? 'Scale fitted to the range: ' : 'Range: '}
+          {loLabel?.display ?? rawMin.toLocaleString('en-IN')} –{' '}
+          {hiLabel?.display ?? rawMax.toLocaleString('en-IN')} {unit}
         </p>
       )}
       <p id={labelId} className="sr-only">

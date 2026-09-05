@@ -1,0 +1,30 @@
+/* ============================================================
+   Utilities — imported LAST.
+
+   These are single-purpose overrides. They must win against component rules
+   of the same specificity, and source order is what decides that, so this
+   file is always the final import.
+   ============================================================ */
+
+.mobile-only {
+  display: none;
+}
+@media (max-width: 767px) {
+  .mobile-only {
+    display: grid;
+  }
+  .desktop-only {
+    display: none;
+  }
+}
+
+/* Secondary table columns fold away before the table itself has to scroll. */
+@media (max-width: 1023px) {
+  .col-secondary {
+    display: none;
+  }
+}
+
+.hidden {
+  display: none;
+}

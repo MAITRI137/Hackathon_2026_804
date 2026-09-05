@@ -257,8 +257,12 @@ export interface ScaleData {
   }[];
   /** Every employee id in the organisation, story people first. */
   allEmployeeIds: string[];
+  /** Join date per employee id, used to scope payrun membership. */
+  joinDates: Record<string, ISODate>;
   /** What the finished dataset actually holds, counted as it was built. */
   recordBudget: { target: number; story: number; generated: number; total: number };
+  /** Monthly wage bill per department, used to configure realistic budgets. */
+  departmentWageBill: Record<string, number>;
 }
 
 /**
@@ -273,8 +277,10 @@ export function buildScaleData(): ScaleData {
   const storyIds = new Set(demo.employees.map((e) => e.id));
   const storyRecords = storyRecordCount();
   // Each payrun carries a membership row per employee, so headcount costs more
-  // than the employee row itself.
-  const membershipCostPerEmployee = demo.payruns.length;
+  // than the employee row itself. Employees who joined mid-year are not in
+  // every payrun, so the estimate is deliberately conservative — the finished
+  // dataset then lands at or above the budget rather than just below it.
+  const membershipCostPerEmployee = demo.payruns.length - 0.45;
   let generatedRecords = 0;
   const total = () =>
     storyRecords +
@@ -307,8 +313,14 @@ export function buildScaleData(): ScaleData {
           : i % 47 === 0
             ? 'INTERN'
             : 'FULL_TIME';
-    const joinYear = 2020 + (i % 6);
-    const joinDate = `${joinYear}-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`;
+    // A growing company: most people are long-tenured, but roughly one in seven
+    // joined during the current year, spread across its months. Headcount then
+    // genuinely differs between payroll periods, which is both realistic and
+    // what makes the month-over-month trend say something.
+    const joinsThisYear = i % 7 === 3;
+    const joinDate = joinsThisYear
+      ? `2026-${String(1 + (i % 9)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`
+      : `${2020 + (i % 6)}-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`;
     const probation = i % 97 === 0;
     const bank = pick(BANKS);
     const wage = between(32, 145) * 1000;
@@ -347,7 +359,8 @@ export function buildScaleData(): ScaleData {
       id: `ct-${id}`,
       contractRef: `CT-${10000 + n}`,
       employeeId: id,
-      startDate: '2026-01-01',
+      // The contract cannot predate the person it belongs to.
+      startDate: joinDate > '2026-01-01' ? joinDate : '2026-01-01',
       endDate: '2026-12-31',
       departmentId,
       jobPositionId,
@@ -397,10 +410,12 @@ export function buildScaleData(): ScaleData {
 
     generatedRecords += 3; // three allocations
 
-    // Roughly one in twelve people take unpaid leave in the open period, so the
-    // deduction rule and the variance guard both have real work to do at scale.
-    if (i % 12 === 5) {
-      const from = addDays(period, 7 + (i % 14));
+    // Unpaid leave is spread across the seeded months, not only the open one:
+    // without variation every period computes to the same total and the
+    // month-over-month trend is a flat line that tells the reader nothing.
+    if (i % 9 === 4) {
+      const payrun = demo.payruns[i % demo.payruns.length];
+      const from = addDays(payrun.periodStart, 6 + (i % 12));
       leaveRequests.push({
         id: `LR-S${n}`,
         employeeId: id,
@@ -413,10 +428,10 @@ export function buildScaleData(): ScaleData {
         reason: 'Personal leave without pay.',
         status: 'APPROVED',
         approverId: 'usr-hr',
-        decidedAt: '2026-09-01T10:00:00+05:30',
+        decidedAt: `${payrun.periodStart}T10:00:00+05:30`,
         decisionNote: null,
         autoDecidedBy: null,
-        createdAt: '2026-08-27T10:00:00+05:30',
+        createdAt: `${payrun.periodStart}T10:00:00+05:30`,
       });
       generatedRecords += 1;
     }
@@ -470,9 +485,23 @@ export function buildScaleData(): ScaleData {
     }
   }
 
+  // Department budgets are configured data, but they should be plausible for
+  // the organisation that actually exists — a budget set for 42 people makes
+  // the budget-vs-actual chart meaningless at 287.
+  const departmentWageBill: Record<string, number> = {};
+  for (const employee of [...demo.employees, ...employees]) {
+    const wage =
+      'wage' in employee
+        ? employee.wage
+        : Number(demo.contracts.find((c) => c.employeeId === employee.id)?.wage ?? 0);
+    departmentWageBill[employee.departmentId] =
+      (departmentWageBill[employee.departmentId] ?? 0) + wage;
+  }
+
   return {
     employees,
     contracts,
+    departmentWageBill,
     attendance,
     leaveAllocations,
     leaveRequests,
@@ -480,6 +509,10 @@ export function buildScaleData(): ScaleData {
       ...demo.employees.map((e) => e.id).filter((id) => storyIds.has(id)),
       ...employees.map((e) => e.id),
     ],
+    joinDates: Object.fromEntries([
+      ...demo.employees.map((e) => [e.id, e.joinDate] as const),
+      ...employees.map((e) => [e.id, e.joinDate] as const),
+    ]),
     recordBudget: {
       target: TARGET_RECORDS,
       story: storyRecords,

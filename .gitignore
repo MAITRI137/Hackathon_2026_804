@@ -35,3 +35,12 @@ implementation_plan.md
 IMPLEMENTATION_PLAN.md
 task.md
 plan/
+
+# Submission documentation linked from README.md
+!docs/IMPLEMENTATION_PLAN.md
+!docs/checklists/
+!docs/checklists/**
+!docs/plan/
+!docs/plan/**
+!docs/references/
+!docs/references/**

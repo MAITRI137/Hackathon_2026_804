@@ -2,7 +2,7 @@
 
 PeoplePay360 is an explainable HR and payroll operating system built for the Odoo Hackathon 2026. It turns employee, contract, attendance, leave, and salary-policy data into a controlled payroll workflow where every rupee can be traced back to its source.
 
-> Team 804 · Maitri Kansagra and Vyas Devgha · [Hackathon repository](https://github.com/MAITRI137/Hackathon_2026_804)
+> Team 804 · Maitri Kansagra and Vyas Devgna · [Hackathon repository](https://github.com/MAITRI137/Hackathon_2026_804)
 
 ## Why it stands out
 

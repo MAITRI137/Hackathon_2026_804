@@ -332,6 +332,9 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* Only bounded components (tables, schedule grids, charts) scroll sideways.
+     The page itself never does. */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
@@ -362,9 +365,16 @@
 .page-body {
   padding: var(--s5) var(--s6) var(--s9);
   max-width: var(--page-max);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--s4);
+}
+/* Every direct child of a page or grid must be allowed to shrink, otherwise a
+   wide table or a long word pushes the whole column past the viewport. */
+.page-body > *,
+.grid > * {
+  min-width: 0;
 }
 .toolbar {
   display: flex;

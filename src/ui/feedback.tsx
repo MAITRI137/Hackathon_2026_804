@@ -104,12 +104,19 @@ export function Stepper({
       {steps.map((s, i) => {
         const state = i < index ? 'done' : i === index ? 'current' : 'future';
         return (
-          <li className="step" data-state={state} key={s.key} aria-current={state === 'current' ? 'step' : undefined}>
+          <li
+            className="step"
+            data-state={state}
+            key={s.key}
+            aria-current={state === 'current' ? 'step' : undefined}
+          >
             <b>
               {state === 'done' && <Check size={13} strokeWidth={3} aria-hidden />}
               {s.label}
             </b>
-            <span>{state === 'future' ? s.caption : state === 'done' ? 'Completed' : s.caption}</span>
+            <span>
+              {state === 'future' ? s.caption : state === 'done' ? 'Completed' : s.caption}
+            </span>
           </li>
         );
       })}
@@ -198,7 +205,12 @@ export function ConsequencePreview({
   rows,
   note,
 }: {
-  rows: { label: string; before: ReactNode; after: ReactNode; delta?: { text: string; positive: boolean } }[];
+  rows: {
+    label: string;
+    before: ReactNode;
+    after: ReactNode;
+    delta?: { text: string; positive: boolean };
+  }[];
   note?: ReactNode;
 }) {
   return (
@@ -211,7 +223,9 @@ export function ConsequencePreview({
             <span aria-hidden>→</span>
             <strong>{r.after}</strong>
             {r.delta && (
-              <span className={clsx('delta', r.delta.positive ? 'pos' : 'neg')}>{r.delta.text}</span>
+              <span className={clsx('delta', r.delta.positive ? 'pos' : 'neg')}>
+                {r.delta.text}
+              </span>
             )}
           </span>
         </div>
@@ -226,18 +240,28 @@ export function ConsequencePreview({
 export function Timeline({
   items,
 }: {
-  items: { id: string; title: ReactNode; caption: ReactNode; detail?: ReactNode; tone?: 'brand' | 'success' | 'warning' | 'danger' }[];
+  items: {
+    id: string;
+    title: ReactNode;
+    caption: ReactNode;
+    detail?: ReactNode;
+    tone?: 'brand' | 'success' | 'warning' | 'danger';
+  }[];
 }) {
   return (
     <div className="timeline">
       {items.map((it) => (
         <div className="tl-item" key={it.id}>
           <span className={clsx('tl-dot', it.tone)} aria-hidden />
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{it.caption}</div>
-          <div style={{ fontWeight: 600 }}>{it.title}</div>
-          {it.detail && (
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>{it.detail}</div>
-          )}
+          <div className="tl-body">
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{it.caption}</div>
+            <div style={{ fontWeight: 600 }}>{it.title}</div>
+            {it.detail && (
+              <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>
+                {it.detail}
+              </div>
+            )}
+          </div>
         </div>
       ))}
     </div>

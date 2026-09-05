@@ -907,7 +907,12 @@
   font-size: var(--fs-sm);
 }
 .skeleton {
-  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    var(--surface-2) 50%,
+    var(--surface-3) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: var(--r-sm);
@@ -1416,38 +1421,54 @@
 }
 
 /* ─── Timeline ───────────────────────────────────────────── */
+/* A two-column grid: a fixed marker rail and the content.  The marker is a
+   real grid item, never an absolutely-positioned span, so it cannot be
+   stretched into an ellipse by its neighbours. */
 .timeline {
-  position: relative;
-  padding-left: var(--s6);
-}
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  background: var(--border);
+  display: grid;
+  gap: 0;
 }
 .tl-item {
-  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: var(--s3);
+  align-items: start;
   padding-bottom: var(--s4);
+  position: relative;
 }
 .tl-item:last-child {
   padding-bottom: 0;
 }
-.tl-dot {
+/* the connecting rail, drawn behind each marker */
+.tl-item:not(:last-child)::before {
+  content: '';
   position: absolute;
-  left: calc(var(--s6) * -1);
-  top: 3px;
+  left: 7px;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.tl-dot {
+  grid-column: 1;
+  grid-row: 1 / span 3;
   width: 16px;
   height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  flex: none;
+  box-sizing: border-box;
   border-radius: 50%;
   border: 2px solid var(--border-strong);
   background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  align-self: start;
+  margin-top: 2px;
+  position: relative;
+  z-index: 1;
+}
+.tl-body {
+  grid-column: 2;
+  min-width: 0;
 }
 .tl-dot.brand {
   border-color: var(--brand);
@@ -1952,7 +1973,10 @@ button.prov-node {
 /* ─── Operations request flow ───────────────────────────── */
 .flow-map {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) minmax(70px, 1.3fr) minmax(120px, 1fr) minmax(70px, 1.3fr) minmax(110px, 1fr);
+  grid-template-columns: minmax(110px, 1fr) minmax(70px, 1.3fr) minmax(120px, 1fr) minmax(
+      70px,
+      1.3fr
+    ) minmax(110px, 1fr);
   align-items: center;
   min-height: 150px;
   gap: var(--s3);
@@ -1968,14 +1992,73 @@ button.prov-node {
   border-radius: var(--r-lg);
   text-align: center;
 }
-.flow-node span { color: var(--text-muted); font-size: var(--fs-xs); }
-.flow-node.brand-node { background: var(--brand-light); color: var(--brand); border-color: var(--info-border); }
-.flow-line { height: 2px; background: var(--border-strong); position: relative; overflow: visible; }
-.flow-line i { position: absolute; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); animation: flowPulse 3s linear infinite; }
-@keyframes flowPulse { from { left: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { left: calc(100% - 8px); opacity: 0; } }
+.flow-node span {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+.flow-node.brand-node {
+  background: var(--brand-light);
+  color: var(--brand);
+  border-color: var(--info-border);
+}
+.flow-line {
+  height: 2px;
+  background: var(--border-strong);
+  position: relative;
+  overflow: visible;
+}
+.flow-line i {
+  position: absolute;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: flowPulse 3s linear infinite;
+}
+@keyframes flowPulse {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    left: calc(100% - 8px);
+    opacity: 0;
+  }
+}
 @media (max-width: 680px) {
-  .flow-map { grid-template-columns: 1fr; }
-  .flow-line { width: 2px; height: 44px; justify-self: center; }
-  .flow-line i { left: -3px; animation-name: flowPulseVertical; }
-  @keyframes flowPulseVertical { from { top: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { top: calc(100% - 8px); opacity: 0; } }
+  .flow-map {
+    grid-template-columns: 1fr;
+  }
+  .flow-line {
+    width: 2px;
+    height: 44px;
+    justify-self: center;
+  }
+  .flow-line i {
+    left: -3px;
+    animation-name: flowPulseVertical;
+  }
+  @keyframes flowPulseVertical {
+    from {
+      top: 0;
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    to {
+      top: calc(100% - 8px);
+      opacity: 0;
+    }
+  }
 }

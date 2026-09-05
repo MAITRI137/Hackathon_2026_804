@@ -20,7 +20,14 @@ data/outbox/
 .codex/
 .gemini/
 skills/
-docs/
+docs/*
+!docs/IMPLEMENTATION_PLAN.md
+!docs/checklists/
+!docs/checklists/**
+!docs/plan/
+!docs/plan/**
+!docs/references/
+!docs/references/**
 AGENTS.md
 SKILL.md
 walkthrough.md

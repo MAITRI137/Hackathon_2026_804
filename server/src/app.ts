@@ -10,6 +10,7 @@ import { originGuard } from './middleware/origin-guard.js';
 import { requestId } from './middleware/request-id.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { authRouter } from './routes/auth.js';
+import { bootstrapRouter } from './routes/bootstrap.js';
 import { healthRouter } from './routes/health.js';
 
 const PostgresSessionStore = connectPgSimple(session);
@@ -48,6 +49,7 @@ export function createApp() {
   app.use(loadCurrentUser);
   app.use('/api', healthRouter);
   app.use('/api', authRouter);
+  app.use('/api', bootstrapRouter);
   app.use(errorHandler);
 
   return app;

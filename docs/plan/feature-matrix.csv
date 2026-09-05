@@ -115,10 +115,10 @@ B2,HTTP-only server session,PostgreSQL-backed rolling session,user_session table
 B3,Password hashing,Argon2id verify and rehash flow,passwordHash only,,12-character new-password minimum,auth.test.ts,Seeded local credential exercised through API,VERIFIED,MAITRI137,Plaintext password is never persisted
 B4,CSRF/origin mitigation,Origin or Referer guard,,,Safe-method allowlist and exact origin match,auth.test.ts,Cross-origin POST returns ORIGIN_MISMATCH,VERIFIED,MAITRI137,Guard runs before state-changing handlers
 B5,Zod/API validation,,,,,,,NOT_STARTED,,
-B6,IDOR protection,,,,,,,NOT_STARTED,,
+B6,IDOR protection,Role-scoped bootstrap query,Employee-owned row filters,,Server-side role plus ownership scope,bootstrap.test.ts,Employee receives only EMP-001 records,IMPLEMENTED,MAITRI137,Expand the same scope helper across mutation routes
 B7,DB money precision,Prisma Decimal fields,PostgreSQL DECIMAL(18-2),,Schema constraints,database-contract.test.ts,Seeded schema validation,VERIFIED,MAITRI137,Migration applied and exercised against persisted seed data
 B8,decimal.js path,,,,,,,NOT_STARTED,,
-B9,API money strings,,,,,,,NOT_STARTED,,
+B9,API money strings,Decimal serialization boundary,Prisma Decimal,,Money leaves API as fixed 2dp text,bootstrap.test.ts,Contract wage response asserted as decimal string,IMPLEMENTED,MAITRI137,Payroll totals will reuse the same serializer
 B10,Restricted formula AST/scope,,,,,,,NOT_STARTED,,
 B11,Unknown symbol rejection,,,,,,,NOT_STARTED,,
 B12,Duplicate payslip DB constraint,,,,,,,NOT_STARTED,,

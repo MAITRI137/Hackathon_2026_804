@@ -1,0 +1,218 @@
+import { Router } from 'express';
+
+import { roleHasPermission } from '../core/rbac/matrix.js';
+import { prisma } from '../db/prisma.js';
+import { requireAuth } from '../middleware/auth.js';
+
+export const bootstrapRouter = Router();
+
+const isoDate = (value: Date) => value.toISOString().slice(0, 10);
+const isoInstant = (value: Date | null) => value?.toISOString() ?? null;
+const withoutTimestamps = <T extends { createdAt: unknown; updatedAt: unknown }>(value: T) => {
+  const { createdAt, updatedAt, ...rest } = value;
+  void createdAt;
+  void updatedAt;
+  return rest;
+};
+const withoutUpdatedAt = <T extends { updatedAt: unknown }>(value: T) => {
+  const { updatedAt, ...rest } = value;
+  void updatedAt;
+  return rest;
+};
+
+bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
+  const user = request.currentUser!;
+  const selfWhere = user.role === 'EMPLOYEE' ? { employeeId: user.employeeId ?? '__none__' } : {};
+  const canReadSalary = roleHasPermission(user.role, 'salary.structure.read');
+  const canReadPayruns = roleHasPermission(user.role, 'payrun.read');
+  const canReadAllPayslips = roleHasPermission(user.role, 'payslip.read.all');
+  const canReadAudit = roleHasPermission(user.role, 'audit.read');
+
+  const [
+    departments,
+    jobPositions,
+    schedules,
+    holidays,
+    leaveTypes,
+    employees,
+    contracts,
+    attendance,
+    leaveAllocations,
+    leaveRequests,
+    salaryStructures,
+    salaryRules,
+    payruns,
+    payslips,
+    documents,
+    audit,
+  ] = await prisma.$transaction([
+    prisma.department.findMany({ orderBy: { name: 'asc' } }),
+    prisma.jobPosition.findMany({ orderBy: [{ departmentId: 'asc' }, { title: 'asc' }] }),
+    prisma.workingSchedule.findMany({ include: { lines: { orderBy: { dayOfWeek: 'asc' } } } }),
+    prisma.holiday.findMany({ orderBy: { date: 'asc' } }),
+    prisma.leaveType.findMany({ orderBy: { name: 'asc' } }),
+    prisma.employee.findMany({
+      where: user.role === 'EMPLOYEE' ? { id: user.employeeId ?? '__none__' } : {},
+      include: { bank: true },
+      orderBy: [{ lastName: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.contract.findMany({ where: selfWhere, orderBy: { startDate: 'desc' } }),
+    prisma.attendance.findMany({
+      where: selfWhere,
+      orderBy: [{ date: 'desc' }, { employeeId: 'asc' }],
+    }),
+    prisma.leaveAllocation.findMany({ where: selfWhere, orderBy: { validFrom: 'desc' } }),
+    prisma.leaveRequest.findMany({ where: selfWhere, orderBy: { createdAt: 'desc' } }),
+    canReadSalary
+      ? prisma.salaryStructure.findMany({ orderBy: { name: 'asc' } })
+      : prisma.salaryStructure.findMany({ where: { id: '__none__' } }),
+    canReadSalary
+      ? prisma.salaryRule.findMany({ orderBy: [{ sequence: 'asc' }, { code: 'asc' }] })
+      : prisma.salaryRule.findMany({ where: { id: '__none__' } }),
+    canReadPayruns
+      ? prisma.payrun.findMany({ include: { employees: true }, orderBy: { periodStart: 'asc' } })
+      : prisma.payrun.findMany({ where: { id: '__none__' }, include: { employees: true } }),
+    prisma.payslip.findMany({
+      where: canReadAllPayslips ? {} : { employeeId: user.employeeId ?? '__none__' },
+      include: { lines: { orderBy: { sequence: 'asc' } } },
+      orderBy: { periodStart: 'desc' },
+    }),
+    prisma.document.findMany({
+      where:
+        user.role === 'EMPLOYEE'
+          ? { OR: [{ employeeId: user.employeeId }, { employeeId: null }] }
+          : {},
+      orderBy: { uploadedAt: 'desc' },
+    }),
+    canReadAudit
+      ? prisma.auditEvent.findMany({ orderBy: { at: 'desc' }, take: 500 })
+      : prisma.auditEvent.findMany({ where: { id: '__none__' } }),
+  ]);
+
+  response.json({
+    data: {
+      session: { user },
+      departments: departments.map((item) => ({
+        ...item,
+        monthlyBudget: item.monthlyBudget.toFixed(2),
+      })),
+      jobPositions,
+      schedules: schedules.map(({ lines, ...schedule }) => ({
+        ...schedule,
+        hoursPerWeek: schedule.hoursPerWeek.toNumber(),
+        createdAt: schedule.createdAt.toISOString(),
+        updatedAt: schedule.updatedAt.toISOString(),
+        lines: lines.map((line) => ({
+          dayOfWeek: line.dayOfWeek,
+          start: line.startTime,
+          end: line.endTime,
+          breakMinutes: line.breakMinutes,
+        })),
+      })),
+      holidays: holidays.map((item) => ({ ...item, date: isoDate(item.date) })),
+      leaveTypes: leaveTypes.map((item) => ({
+        ...item,
+        carryForwardMax: item.carryForwardMax.toNumber(),
+        accrualPerMonth: item.accrualPerMonth.toNumber(),
+      })),
+      employees: employees.map((employee) => {
+        const { bank, ...item } = withoutTimestamps(employee);
+        return {
+          ...item,
+          joinDate: isoDate(item.joinDate),
+          exitDate: item.exitDate ? isoDate(item.exitDate) : null,
+          probationEndDate: item.probationEndDate ? isoDate(item.probationEndDate) : null,
+          bank: bank
+            ? {
+                accountName: bank.accountName,
+                accountNumberMasked: bank.accountNumberMasked,
+                ifsc: bank.ifsc,
+                bankName: bank.bankName,
+                verifiedAt: isoInstant(bank.verifiedAt),
+              }
+            : null,
+        };
+      }),
+      contracts: contracts.map((contract) => {
+        const item = withoutTimestamps(contract);
+        return {
+          ...item,
+          startDate: isoDate(item.startDate),
+          endDate: item.endDate ? isoDate(item.endDate) : null,
+          wage: item.wage.toFixed(2),
+        };
+      }),
+      attendance: attendance.map((record) => {
+        const item = withoutTimestamps(record);
+        return { ...item, date: isoDate(item.date), correctedAt: isoInstant(item.correctedAt) };
+      }),
+      leaveAllocations: leaveAllocations.map((allocation) => {
+        const item = withoutTimestamps(allocation);
+        return {
+          ...item,
+          allocated: item.allocated.toNumber(),
+          used: item.used.toNumber(),
+          carriedForward: item.carriedForward.toNumber(),
+          validFrom: isoDate(item.validFrom),
+          validTo: isoDate(item.validTo),
+        };
+      }),
+      leaveRequests: leaveRequests.map((request) => {
+        const item = withoutUpdatedAt(request);
+        return {
+          ...item,
+          fromDate: isoDate(item.fromDate),
+          toDate: isoDate(item.toDate),
+          days: item.days.toNumber(),
+          decidedAt: isoInstant(item.decidedAt),
+          createdAt: item.createdAt.toISOString(),
+        };
+      }),
+      salaryStructures: salaryStructures.map(withoutTimestamps),
+      salaryRules: salaryRules.map((rule) => {
+        const item = withoutTimestamps(rule);
+        return {
+          ...item,
+          amount: item.amount?.toFixed(2) ?? null,
+          percentage: item.percentage?.toString() ?? null,
+        };
+      }),
+      payruns: payruns.map((payrun) => {
+        const { employees: selected, ...item } = withoutTimestamps(payrun);
+        return {
+          ...item,
+          periodStart: isoDate(item.periodStart),
+          periodEnd: isoDate(item.periodEnd),
+          frozenAt: isoInstant(item.frozenAt),
+          computedAt: isoInstant(item.computedAt),
+          validatedAt: isoInstant(item.validatedAt),
+          paidAt: isoInstant(item.paidAt),
+          employeeIds: selected
+            .filter((entry) => !entry.excludedAt)
+            .map((entry) => entry.employeeId),
+        };
+      }),
+      payslips: payslips.map(({ lines, ...item }) => ({
+        ...item,
+        periodStart: isoDate(item.periodStart),
+        periodEnd: isoDate(item.periodEnd),
+        workedDays: item.workedDays.toNumber(),
+        paidLeaveDays: item.paidLeaveDays.toNumber(),
+        unpaidLeaveDays: item.unpaidLeaveDays.toNumber(),
+        gross: item.gross.toFixed(2),
+        totalDeductions: item.totalDeductions.toFixed(2),
+        net: item.net.toFixed(2),
+        computedAt: item.computedAt.toISOString(),
+        deliveredAt: isoInstant(item.deliveredAt),
+        delivery: item.deliveryStatus,
+        lines: lines.map((line) => ({ ...line, amount: line.amount.toFixed(2) })),
+      })),
+      documents: documents.map((item) => ({
+        ...item,
+        uploadedAt: item.uploadedAt.toISOString(),
+        acknowledgedAt: isoInstant(item.acknowledgedAt),
+      })),
+      audit: audit.map((item) => ({ ...item, at: item.at.toISOString() })),
+    },
+  });
+});

@@ -1,15 +1,33 @@
 import type { ErrorRequestHandler } from 'express';
+import { ZodError } from 'zod';
 
 import { env } from '../config/env.js';
+import { AppError } from '../lib/app-error.js';
 
 export const errorHandler: ErrorRequestHandler = (error, request, response, next) => {
   void next;
-  const status = error instanceof SyntaxError && 'body' in error ? 400 : 500;
-  const message = status === 400 ? 'Invalid request body.' : 'Internal server error.';
+  const isBodySyntaxError = error instanceof SyntaxError && 'body' in error;
+  const status =
+    error instanceof AppError
+      ? error.httpStatus
+      : isBodySyntaxError || error instanceof ZodError
+        ? 400
+        : 500;
+  const code =
+    error instanceof AppError ? error.code : status === 400 ? 'INVALID_REQUEST' : 'INTERNAL_ERROR';
+  const message =
+    error instanceof AppError
+      ? error.userMessage
+      : status === 400
+        ? 'Invalid request.'
+        : 'Internal server error.';
+  const recovery = error instanceof AppError ? error.recovery : undefined;
 
   if (env.NODE_ENV !== 'test') {
     console.error({ requestId: request.requestId, status, error });
   }
 
-  response.status(status).json({ error: { message, requestId: request.requestId } });
+  response
+    .status(status)
+    .json({ error: { code, message, recovery, requestId: request.requestId } });
 };

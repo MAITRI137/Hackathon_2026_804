@@ -110,10 +110,10 @@ A13.2,Server-side permission matrix,,,,,,,NOT_STARTED,,
 A13.3,Employee privacy,,,,,,,NOT_STARTED,,
 A13.4,HR Manager no payrun admin,,,,,,,NOT_STARTED,,
 A13.5,Admin manages users/roles,,,,,,,NOT_STARTED,,
-B1,Real authentication,,,,,,,NOT_STARTED,,
-B2,HTTP-only server session,,,,,,,NOT_STARTED,,
-B3,Password hashing,,,,,,,NOT_STARTED,,
-B4,CSRF/origin mitigation,,,,,,,NOT_STARTED,,
+B1,Real authentication,Email/password login and current-user routes,User lockout fields,,Zod credential validation,auth.test.ts,Manual login as usr-pm through running API,VERIFIED,MAITRI137,Generic credential errors prevent account enumeration
+B2,HTTP-only server session,PostgreSQL-backed rolling session,user_session table,,8h idle and 12h absolute expiry,auth.test.ts,Manual login-me-logout cookie flow,VERIFIED,MAITRI137,Session ID regenerated on login and password change
+B3,Password hashing,Argon2id verify and rehash flow,passwordHash only,,12-character new-password minimum,auth.test.ts,Seeded local credential exercised through API,VERIFIED,MAITRI137,Plaintext password is never persisted
+B4,CSRF/origin mitigation,Origin or Referer guard,,,Safe-method allowlist and exact origin match,auth.test.ts,Cross-origin POST returns ORIGIN_MISMATCH,VERIFIED,MAITRI137,Guard runs before state-changing handlers
 B5,Zod/API validation,,,,,,,NOT_STARTED,,
 B6,IDOR protection,,,,,,,NOT_STARTED,,
 B7,DB money precision,Prisma Decimal fields,PostgreSQL DECIMAL(18-2),,Schema constraints,database-contract.test.ts,Seeded schema validation,VERIFIED,MAITRI137,Migration applied and exercised against persisted seed data

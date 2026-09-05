@@ -1975,25 +1975,6 @@ button.prov-node {
 }
 
 /* ─── Print (payslip PDF fallback) ───────────────────────── */
-@media print {
-  body {
-    overflow: visible;
-    background: #fff;
-  }
-  .no-print,
-  .app-sidebar,
-  .app-topbar,
-  .toasts,
-  .batchbar {
-    display: none !important;
-  }
-  .payslip {
-    box-shadow: none;
-    border: none;
-    max-width: none;
-  }
-}
-
 /* ─── Operations console ─────────────────────────────────── */
 .node-graph {
   position: relative;
@@ -2044,4 +2025,254 @@ button.prov-node {
 /* The navigation drawer's scrim sits below the drawer but above the workspace. */
 .scrim-nav {
   z-index: 95;
+}
+
+/* ─── Payslip: per-line explanation + provenance chain ───── */
+.ps-why {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition:
+    background var(--t),
+    color var(--t);
+}
+.ps-why-space {
+  width: 26px;
+  min-width: 26px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ps-why:hover {
+    background: var(--brand-light);
+    color: var(--brand);
+  }
+}
+
+.provenance-chain {
+  display: grid;
+  gap: var(--s2);
+}
+.chain-step {
+  position: relative;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+.chain-step + .chain-step::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: calc(var(--s2) * -1 - 1px);
+  height: var(--s2);
+  width: 2px;
+  background: var(--border-strong);
+}
+
+/* ─── Salary change comparison ───────────────────────────── */
+.compare-heads {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+}
+.compare-head {
+  padding: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+.compare-head strong {
+  font-size: var(--fs-xl);
+  font-weight: 750;
+}
+.compare-arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.compare-arrow.pos {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.compare-arrow.neg {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+@media (max-width: 560px) {
+  .compare-heads {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .compare-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+}
+
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+}
+.change-row[data-sign='pos'] {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+.change-row[data-sign='neg'] {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+.change-amount {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.change-row[data-sign='pos'] .change-amount {
+  color: var(--success);
+}
+.change-row[data-sign='neg'] .change-amount {
+  color: var(--danger);
+}
+
+.reconcile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r);
+  border: 1px solid var(--success-border);
+  background: var(--success-bg);
+  font-size: var(--fs-sm);
+}
+.reconcile[data-ok='false'] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+/* ─── Metric delta ───────────────────────────────────────── */
+.metric-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  margin-top: 2px;
+}
+.metric-delta[data-tone='good'] {
+  color: var(--success);
+}
+.metric-delta[data-tone='bad'] {
+  color: var(--danger);
+}
+.metric-delta[data-tone='flat'] {
+  color: var(--text-muted);
+}
+.metric-delta .muted {
+  font-weight: 500;
+}
+
+/* ─── Donut ──────────────────────────────────────────────── */
+.donut {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: center;
+}
+.donut-plot {
+  position: relative;
+  width: 150px;
+  height: 150px;
+}
+.donut-plot svg {
+  width: 100%;
+  height: 100%;
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  pointer-events: none;
+}
+.donut-center strong {
+  font-size: var(--fs-lg);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.donut-legend button {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+@media (hover: hover) and (pointer: fine) {
+  .donut-legend button:hover {
+    background: var(--surface-2);
+  }
+}
+.donut-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  display: block;
+}
+.donut-share {
+  width: 42px;
+  text-align: right;
+  font-size: var(--fs-xs);
+}
+@media (max-width: 620px) {
+  .donut {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .donut-legend {
+    width: 100%;
+  }
+}
+
+/* ─── Report builder ─────────────────────────────────────── */
+.report-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.report-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--border);
 }

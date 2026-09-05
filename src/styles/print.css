@@ -1,0 +1,198 @@
+/* ============================================================
+   Print — imported last.
+
+   The browser's own print-to-PDF is the delivery path for a single payslip or
+   report, so the printed page has to be a real document: no shell, no
+   controls, no colour-dependent meaning, and no orphaned rows.
+   ============================================================ */
+
+@page {
+  size: A4;
+  margin: 14mm 14mm 16mm;
+}
+
+@media print {
+  :root {
+    /* Paper is not a screen: flatten the tinted surfaces so ink is spent on
+       content rather than on backgrounds. */
+    --bg: #ffffff;
+    --bg-gradient: none;
+    --surface: #ffffff;
+    --surface-2: #ffffff;
+    --surface-3: #f2f5f7;
+    --border: #d4dde3;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body {
+    font-size: 10.5pt;
+    color: #000;
+  }
+
+  /* ── the application chrome does not print ── */
+  .app-sidebar,
+  .app-topbar,
+  .page-head,
+  .actionbar,
+  .toasts,
+  .batchbar,
+  .sidecar,
+  .scrim,
+  .modal-layer,
+  .drawer-layer,
+  .launcher-layer,
+  .notif-panel,
+  .no-print {
+    display: none !important;
+  }
+
+  /* ── let the document flow onto pages ── */
+  .app,
+  .app-main,
+  .workspace,
+  .page {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .page-body {
+    padding: 0 !important;
+    max-width: none !important;
+    gap: 10mm;
+  }
+
+  /* ── surfaces become printed blocks ── */
+  .card,
+  .payslip,
+  .metric {
+    box-shadow: none !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    break-inside: avoid;
+  }
+
+  .grid {
+    gap: 6mm !important;
+  }
+
+  /* Tables must not lose their heading across a page break. */
+  thead {
+    display: table-header-group;
+  }
+  tr,
+  .ps-line,
+  .bar-row,
+  .tl-item {
+    break-inside: avoid;
+  }
+  .tbl-wrap,
+  .scroll-x,
+  .chart {
+    overflow: visible !important;
+  }
+  .tbl th {
+    position: static !important;
+    background: var(--surface-3) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── the payslip is the document, not a card on a page ── */
+  .payslip {
+    max-width: none !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+  .payslip-sec {
+    padding: 5mm 0;
+  }
+  .ps-net {
+    margin: 4mm 0 0 !important;
+    padding: 5mm 6mm !important;
+    background: var(--brand) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Keep chip meaning without relying on a printed fill. */
+  .chip {
+    border: 1px solid currentColor !important;
+    background: transparent !important;
+  }
+
+  /* Charts keep their bars: colour is the data here, not decoration. */
+  .chart-bar,
+  .bar-fill,
+  .ring-fill {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .chart-table,
+  details {
+    display: none;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}
+
+/* ── printed document furniture ─────────────────────────────── */
+.doc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding-bottom: var(--s3);
+  border-bottom: 2px solid var(--brand);
+  margin-bottom: var(--s4);
+}
+.doc-head .doc-mark {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: -0.02em;
+}
+.doc-head .doc-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.doc-meta {
+  text-align: right;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.doc-foot {
+  margin-top: var(--s5);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ── print-only visibility ──────────────────────────────────
+   Declared last and marked important: this is a utility, and the document
+   furniture below it sets its own `display`, which would otherwise win on
+   source order and leak the printed header onto the screen.
+   ─────────────────────────────────────────────────────────── */
+.print-only {
+  display: none !important;
+}
+@media print {
+  .print-only {
+    display: block !important;
+  }
+  .doc-head.print-only {
+    display: flex !important;
+  }
+}

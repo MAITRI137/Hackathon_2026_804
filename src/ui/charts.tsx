@@ -381,3 +381,85 @@ export function HBars({
     </div>
   );
 }
+
+/* ── Donut (composition of one total) ──────────────────────── */
+
+/**
+ * A donut answers "what is this total made of", never "how do these compare".
+ * Identity is carried by the legend, which always prints the value beside the
+ * swatch, so the reading never depends on colour alone.
+ */
+export function DonutChart({
+  data,
+  total,
+  totalLabel,
+  unit,
+}: {
+  data: Datum[];
+  total: string;
+  totalLabel: string;
+  unit: string;
+}) {
+  const [active, setActive] = useState<string | null>(null);
+  const sum = data.reduce((a, d) => a + d.value, 0);
+
+  if (data.length === 0 || sum <= 0) {
+    return <EmptyState icon={BarChart3} title="Nothing to break down yet" />;
+  }
+
+  const R = 54;
+  const C = 2 * Math.PI * R;
+  let offset = 0;
+
+  return (
+    <div className="donut">
+      <div className="donut-plot">
+        <svg viewBox="0 0 140 140" role="img" aria-label={`${totalLabel}: ${total}`}>
+          <g transform="translate(70,70) rotate(-90)">
+            {data.map((d) => {
+              const share = d.value / sum;
+              const dash = share * C;
+              const el = (
+                <circle
+                  key={d.id}
+                  r={R}
+                  fill="none"
+                  stroke={d.color ?? 'var(--mark-1)'}
+                  strokeWidth={active === d.id ? 20 : 16}
+                  strokeDasharray={`${dash} ${C - dash}`}
+                  strokeDashoffset={-offset}
+                  style={{ transition: 'stroke-width 140ms ease' }}
+                />
+              );
+              offset += dash;
+              return el;
+            })}
+          </g>
+        </svg>
+        <div className="donut-center">
+          <span className="eyebrow">{totalLabel}</span>
+          <strong>{total}</strong>
+        </div>
+      </div>
+      <ul className="donut-legend">
+        {data.map((d) => (
+          <li key={d.id}>
+            <button
+              type="button"
+              onMouseEnter={() => setActive(d.id)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(d.id)}
+              onBlur={() => setActive(null)}
+              aria-label={`${d.label}: ${d.display ?? d.value} ${unit}, ${Math.round((d.value / sum) * 100)} percent`}
+            >
+              <i style={{ background: d.color ?? 'var(--mark-1)' }} aria-hidden />
+              <span className="grow truncate">{d.label}</span>
+              <span className="mono">{d.display ?? d.value.toLocaleString('en-IN')}</span>
+              <span className="muted donut-share">{Math.round((d.value / sum) * 100)}%</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { Loader2, type LucideIcon } from 'lucide-react';
+import { Loader2, Minus, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 
 /* ── Button ────────────────────────────────────────────────── */
@@ -17,7 +17,19 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', pending, icon: Icon, iconOnly, block, className, children, disabled, type = 'button', ...rest },
+  {
+    variant = 'secondary',
+    size = 'md',
+    pending,
+    icon: Icon,
+    iconOnly,
+    block,
+    className,
+    children,
+    disabled,
+    type = 'button',
+    ...rest
+  },
   ref,
 ) {
   const iconSize = size === 'sm' ? 15 : 16;
@@ -111,12 +123,18 @@ export function Card({
         <header className="card-h">
           <div style={{ minWidth: 0 }}>
             {title && <h3>{title}</h3>}
-            {subtitle && <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{subtitle}</div>}
+            {subtitle && (
+              <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
+                {subtitle}
+              </div>
+            )}
           </div>
           {action}
         </header>
       )}
-      <div className={clsx('card-b', padding === 'tight' && 'tight', padding === 'flush' && 'flush')}>
+      <div
+        className={clsx('card-b', padding === 'tight' && 'tight', padding === 'flush' && 'flush')}
+      >
         {children}
       </div>
     </section>
@@ -175,7 +193,13 @@ export function EmptyState({
   );
 }
 
-export function Skeleton({ height = 16, width = '100%' }: { height?: number; width?: number | string }) {
+export function Skeleton({
+  height = 16,
+  width = '100%',
+}: {
+  height?: number;
+  width?: number | string;
+}) {
   return <div className="skeleton" style={{ height, width }} aria-hidden />;
 }
 
@@ -191,7 +215,11 @@ export function SkeletonRows({ rows = 5 }: { rows?: number }) {
 
 /* ── Info grid ─────────────────────────────────────────────── */
 
-export function InfoGrid({ items }: { items: { label: string; value: ReactNode; mono?: boolean }[] }) {
+export function InfoGrid({
+  items,
+}: {
+  items: { label: string; value: ReactNode; mono?: boolean }[];
+}) {
   return (
     <div className="info-grid">
       {items.map((it) => (
@@ -212,6 +240,7 @@ export function Metric({
   tone,
   sub,
   icon: Icon,
+  delta,
   why,
 }: {
   label: string;
@@ -219,20 +248,54 @@ export function Metric({
   tone?: 'brand' | 'success' | 'warning' | 'danger';
   sub?: ReactNode;
   icon?: LucideIcon;
+  /** Period-over-period movement. `good` says which direction is favourable. */
+  delta?: { percent: number; caption: string; good?: 'up' | 'down' | 'none' };
   /** An explicit, labelled control. The tile itself is never a hidden link. */
   why?: { onClick: () => void; label: string };
 }) {
+  const rising = delta ? delta.percent > 0 : false;
+  const flat = delta ? Math.abs(delta.percent) < 0.05 : true;
+  const favourable =
+    !delta || delta.good === 'none' || flat
+      ? 'flat'
+      : (delta.good ?? 'up') === 'up'
+        ? rising
+          ? 'good'
+          : 'bad'
+        : rising
+          ? 'bad'
+          : 'good';
+
   return (
     <div className="metric">
-      <div className={clsx('metric-v', tone)}>{value}</div>
       <div className="metric-k">
         {Icon && <Icon size={14} aria-hidden />}
         {label}
       </div>
+      <div className={clsx('metric-v', tone)}>{value}</div>
+      {delta && (
+        <div className="metric-delta" data-tone={favourable}>
+          {flat ? (
+            <Minus size={13} aria-hidden />
+          ) : rising ? (
+            <TrendingUp size={13} aria-hidden />
+          ) : (
+            <TrendingDown size={13} aria-hidden />
+          )}
+          <span>{flat ? 'No change' : `${rising ? '+' : ''}${delta.percent.toFixed(1)}%`}</span>
+          <span className="muted">{delta.caption}</span>
+        </div>
+      )}
       {sub && <div className="metric-sub">{sub}</div>}
       {why && (
         <span className="metric-why">
-          <Button size="sm" variant="ghost" onClick={why.onClick} aria-label={why.label} title={why.label}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={why.onClick}
+            aria-label={why.label}
+            title={why.label}
+          >
             Why?
           </Button>
         </span>

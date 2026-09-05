@@ -2,8 +2,8 @@ import type { Role } from '@shared/types';
 
 import type { AppState } from '@/store/state';
 
-const DEMO_PASSWORD = 'PeoplePay360!2026';
-const ROLE_EMAIL: Record<Role, string> = {
+export const DEMO_PASSWORD = 'PeoplePay360!2026';
+export const ROLE_EMAIL: Record<Role, string> = {
   EMPLOYEE: 'aarav.patel@peoplepay360.com',
   HR_MANAGER: 'priya.desai@peoplepay360.com',
   HR_PAYROLL_USER: 'isha.mehta@peoplepay360.com',
@@ -80,6 +80,18 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (response.status === 204) return undefined as T;
   return ((await response.json()) as ApiEnvelope<T>).data;
+}
+
+/** Sign in with real credentials, then load the caller's authorised snapshot. */
+export async function signIn(email: string, password: string): Promise<BootstrapPayload> {
+  await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+  return api<BootstrapPayload>('/bootstrap');
+}
+
+/** Resume an existing server session, or reject if there is none. */
+export async function restoreSession(): Promise<BootstrapPayload> {
+  await api('/auth/me');
+  return api<BootstrapPayload>('/bootstrap');
 }
 
 export async function connectDemoRole(role: Role): Promise<BootstrapPayload> {

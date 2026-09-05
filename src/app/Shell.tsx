@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, CalendarDays, Check, ChevronsUpDown, Menu, Search, Settings, X } from 'lucide-react';
+import {
+  Bell,
+  CalendarDays,
+  Check,
+  ChevronsUpDown,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  X,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { ROLES, ROLE_LABEL, type Role } from '@shared/types';
 import { monthLabel, relativeTime } from '@shared/dates';
@@ -15,7 +25,7 @@ import {
   unreadNotificationCount,
 } from '@/store/selectors';
 import { markNotificationsRead, switchRole } from '@/store/actions';
-import { connectDemoRole } from '@/lib/api';
+import { connectDemoRole, signOut } from '@/lib/api';
 import { bootstrapPayroll } from '@/store/actions';
 import { hydrateFromServer } from '@/store/store';
 import { Avatar, Button } from '@/ui/primitives';
@@ -202,6 +212,21 @@ export function Shell() {
                   </button>
                 );
               })}
+              <div className="role-menu-foot">
+                <button
+                  type="button"
+                  className="role-opt"
+                  onClick={() => {
+                    void signOut().finally(() => window.location.reload());
+                  }}
+                >
+                  <LogOut size={15} aria-hidden />
+                  <span className="grow">
+                    <b>Sign out</b>
+                    <span>End this server session</span>
+                  </span>
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -3,7 +3,7 @@ import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { OverlayProvider, SidecarProvider } from '@/ui/overlays';
 import { ToastProvider, useToast } from '@/ui/toast';
 import { bootstrapPayroll, computeActivePayrun } from '@/store/actions';
-import { connectDemoRole } from '@/lib/api';
+import { restoreSession, type BootstrapPayload } from '@/lib/api';
 import { hydrateFromServer } from '@/store/store';
 import { AppActionsProvider, useAppActions } from './actions-context';
 import { Shell } from './Shell';
@@ -33,6 +33,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage';
 import { UsersPage } from '@/features/settings/UsersPage';
 import { OpsPage } from '@/features/ops/OpsPage';
 import { NotFoundPage } from '@/features/home/NotFoundPage';
+import { LoginPage } from '@/features/auth/LoginPage';
 
 /** Global dialogs the launcher and every screen can open. */
 function GlobalDialogs() {
@@ -175,40 +176,43 @@ const router = createHashRouter([
 ]);
 
 export function App() {
-  const [ready, setReady] = useState(false);
+  const [phase, setPhase] = useState<'checking' | 'signed-out' | 'ready'>('checking');
 
+  const enter = useCallback((payload: BootstrapPayload) => {
+    hydrateFromServer(payload);
+    bootstrapPayroll();
+    setPhase('ready');
+  }, []);
+
+  // Resume an existing server session on load. There is no automatic sign-in:
+  // without a valid session cookie the app shows the sign-in screen.
   useEffect(() => {
     let active = true;
-    void connectDemoRole('HR_PAYROLL_MANAGER')
+    void restoreSession()
       .then((payload) => {
-        if (!active) return;
-        hydrateFromServer(payload);
-        bootstrapPayroll();
+        if (active) enter(payload);
       })
       .catch(() => {
-        if (!active) return;
-        // Offline judging remains usable from the deterministic local story.
-        bootstrapPayroll();
-      })
-      .finally(() => {
-        if (active) setReady(true);
+        if (active) setPhase('signed-out');
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [enter]);
 
-  if (!ready) {
+  if (phase === 'checking') {
     return (
-      <div className="app">
-        <div className="app-main">
-          <div className="page-body" aria-busy="true">
-            <div className="skeleton" style={{ height: 120 }} />
-            <div className="skeleton" style={{ height: 220 }} />
-          </div>
-        </div>
+      <div className="boot" role="status" aria-live="polite">
+        <span className="brand-mark" aria-hidden>
+          P
+        </span>
+        <p>Restoring your session…</p>
       </div>
     );
+  }
+
+  if (phase === 'signed-out') {
+    return <LoginPage onSignedIn={enter} />;
   }
 
   return (

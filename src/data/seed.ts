@@ -6,8 +6,41 @@
  * blockers, three prior paid periods for trend and comparison, one contract
  * expiring, one probation ending, and one pending salary change.
  */
-import type { Attendance, AuditEvent, ChecklistInstance, Contract, Department, Employee, EmployeeDocument, Holiday, JobPosition, LeaveAllocation, LeaveRequest, LeaveType, Payrun, ProfileChangeRequest, SalaryChangeRequest, SalaryRule, SalaryStructure, User, WorkingSchedule } from '../../shared/types.js';
-import { addDays, addMonths, countWorkingDays, eachDay, fromMinutes, isWorkingDay, monthEnd, monthLabel, monthStart, toISO, type ISODate, type WorkingDayContext } from '../../shared/dates.js';
+import type {
+  Attendance,
+  AuditEvent,
+  ChecklistInstance,
+  Contract,
+  Department,
+  Employee,
+  EmployeeDocument,
+  Holiday,
+  JobPosition,
+  LeaveAllocation,
+  LeaveRequest,
+  LeaveType,
+  Payrun,
+  ProfileChangeRequest,
+  SalaryChangeRequest,
+  SalaryRule,
+  SalaryStructure,
+  User,
+  WorkingSchedule,
+} from '../../shared/types.js';
+import {
+  addDays,
+  addMonths,
+  countWorkingDays,
+  eachDay,
+  fromMinutes,
+  isWorkingDay,
+  monthEnd,
+  monthLabel,
+  monthStart,
+  toISO,
+  type ISODate,
+  type WorkingDayContext,
+} from '../../shared/dates.js';
 
 /** The demo clock. Everything derives from this — nothing is hardcoded elsewhere. */
 export const TODAY: ISODate = '2026-09-05';
@@ -291,8 +324,58 @@ const STORY: Story[] = [
   },
 ];
 
-const FIRST = ['Ananya', 'Rohan', 'Kavya', 'Vikram', 'Sneha', 'Aditya', 'Diya', 'Manish', 'Riya', 'Sahil', 'Pooja', 'Nikhil', 'Tanvi', 'Yash', 'Ira', 'Harsh', 'Neha', 'Varun', 'Sara', 'Kabir', 'Anjali', 'Om', 'Zara', 'Rehan', 'Lakshmi', 'Siddharth', 'Naina', 'Rudra', 'Aisha', 'Gaurav', 'Mira', 'Parth'];
-const LAST = ['Verma', 'Nair', 'Iyer', 'Kulkarni', 'Bhatt', 'Chauhan', 'Menon', 'Rao', 'Kapoor', 'Pillai', 'Sinha', 'Trivedi', 'Banerjee', 'Deshmukh', 'Malhotra', 'Bose'];
+const FIRST = [
+  'Ananya',
+  'Rohan',
+  'Kavya',
+  'Vikram',
+  'Sneha',
+  'Aditya',
+  'Diya',
+  'Manish',
+  'Riya',
+  'Sahil',
+  'Pooja',
+  'Nikhil',
+  'Tanvi',
+  'Yash',
+  'Ira',
+  'Harsh',
+  'Neha',
+  'Varun',
+  'Sara',
+  'Kabir',
+  'Anjali',
+  'Om',
+  'Zara',
+  'Rehan',
+  'Lakshmi',
+  'Siddharth',
+  'Naina',
+  'Rudra',
+  'Aisha',
+  'Gaurav',
+  'Mira',
+  'Parth',
+];
+const LAST = [
+  'Verma',
+  'Nair',
+  'Iyer',
+  'Kulkarni',
+  'Bhatt',
+  'Chauhan',
+  'Menon',
+  'Rao',
+  'Kapoor',
+  'Pillai',
+  'Sinha',
+  'Trivedi',
+  'Banerjee',
+  'Deshmukh',
+  'Malhotra',
+  'Bose',
+];
 
 const POS_BY_DEP: Record<string, string[]> = {
   'dep-eng': ['jp-swe', 'jp-sse', 'jp-fe', 'jp-qa', 'jp-devops'],
@@ -304,7 +387,19 @@ const POS_BY_DEP: Record<string, string[]> = {
   'dep-mkt': ['jp-mm', 'jp-ca'],
   'dep-sup': ['jp-sup'],
 };
-const DEP_WEIGHTS = ['dep-eng', 'dep-eng', 'dep-eng', 'dep-sls', 'dep-sls', 'dep-ops', 'dep-prd', 'dep-fin', 'dep-mkt', 'dep-sup', 'dep-hr'];
+const DEP_WEIGHTS = [
+  'dep-eng',
+  'dep-eng',
+  'dep-eng',
+  'dep-sls',
+  'dep-sls',
+  'dep-ops',
+  'dep-prd',
+  'dep-fin',
+  'dep-mkt',
+  'dep-sup',
+  'dep-hr',
+];
 
 function initials(first: string, last: string) {
   return (first[0] + last[0]).toUpperCase();
@@ -778,7 +873,10 @@ export const leaveRequests: LeaveRequest[] = [
  *  table, the calendar and the anomaly list — they can never disagree. */
 export const MISSING_CHECKOUT = { employeeId: 'EMP-004', date: '2026-09-03' as ISODate };
 
-const HISTORY_START: ISODate = '2026-06-01';
+/** Punch history retained for the narrated story. One month keeps the whole
+ *  dataset inside the 5,000-record demo budget while still filling the
+ *  attendance list, calendar and anomaly views. */
+const HISTORY_START: ISODate = '2026-08-03';
 
 export const attendance: Attendance[] = [];
 {
@@ -892,12 +990,19 @@ function makePayrun(anchor: ISODate, status: Payrun['status']): Payrun {
     paidAt: status === 'PAID' ? `${end}T16:00:00+05:30` : null,
     inputSnapshotHash: null,
     createdById: 'usr-pm',
-    employeeIds: employees.filter((e) => e.joinDate <= end && e.status !== 'EXITED').map((e) => e.id),
+    employeeIds: employees
+      .filter((e) => e.joinDate <= end && e.status !== 'EXITED')
+      .map((e) => e.id),
     version: 1,
   };
 }
 
-export const payruns: Payrun[] = [makePayrun('2026-06-15', 'PAID'), makePayrun('2026-07-15', 'PAID'), makePayrun('2026-08-15', 'PAID'), makePayrun('2026-09-15', 'DRAFT')];
+export const payruns: Payrun[] = [
+  makePayrun('2026-06-15', 'PAID'),
+  makePayrun('2026-07-15', 'PAID'),
+  makePayrun('2026-08-15', 'PAID'),
+  makePayrun('2026-09-15', 'DRAFT'),
+];
 
 export const ACTIVE_PAYRUN_ID = 'PR-2026-09';
 

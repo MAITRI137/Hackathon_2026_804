@@ -2,10 +2,26 @@ import { hash } from 'argon2';
 import { PrismaClient } from '@prisma/client';
 
 import * as demo from '../../src/data/seed.js';
+import { buildScaleData, TARGET_RECORDS } from './scale.js';
 
 const prisma = new PrismaClient();
 
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
+
+/** Insert in bounded batches so a 20,000-row table never becomes one giant statement. */
+async function createInChunks<T>(
+  label: string,
+  rows: T[],
+  insert: (batch: T[]) => Promise<unknown>,
+  size = 2000,
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += size) {
+    await insert(rows.slice(i, i + size));
+  }
+  if (rows.length) console.info(`  ${label}: ${rows.length}`);
+}
+
+const scale = buildScaleData();
 const instant = (value: string | null | undefined) => (value ? new Date(value) : null);
 
 async function clearDatabase() {
@@ -196,11 +212,16 @@ async function seedPayrunsAndEvidence() {
       version: payrun.version,
     })),
   });
-  await prisma.payrunEmployee.createMany({
-    data: demo.payruns.flatMap((payrun) =>
-      payrun.employeeIds.map((employeeId) => ({ payrunId: payrun.id, employeeId })),
-    ),
-  });
+  // Every payrun covers the whole organisation, so payroll totals, readiness
+  // and reports are computed against all 5,000 people rather than a sample.
+  const everyone = scale.allEmployeeIds;
+  for (const payrun of demo.payruns) {
+    await createInChunks(`payrun ${payrun.id} members`, everyone, (batch) =>
+      prisma.payrunEmployee.createMany({
+        data: batch.map((employeeId) => ({ payrunId: payrun.id, employeeId })),
+      }),
+    );
+  }
   await prisma.document.createMany({
     data: demo.documents.map((document) => ({
       ...document,
@@ -218,28 +239,133 @@ async function seedPayrunsAndEvidence() {
   });
 }
 
+/**
+ * Grow the story organisation to full scale. The 42 narrated people keep every
+ * hand-authored detail; the rest of the workforce is generated deterministically
+ * so payroll, reports and the operations console all run against real volume.
+ */
+async function seedScaleWorkforce() {
+  console.info(
+    `Growing the organisation to a ${TARGET_RECORDS.toLocaleString('en-IN')}-record dataset ` +
+      `(${(demo.employees.length + scale.employees.length).toLocaleString('en-IN')} employees)...`,
+  );
+
+  await createInChunks('employees', scale.employees, (batch) =>
+    prisma.employee.createMany({
+      data: batch.map((employee) => ({
+        id: employee.id,
+        employeeCode: employee.employeeCode,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        fullName: employee.fullName,
+        initials: employee.initials,
+        email: employee.email,
+        phone: employee.phone,
+        departmentId: employee.departmentId,
+        jobPositionId: employee.jobPositionId,
+        employeeType: employee.employeeType,
+        status: employee.status,
+        joinDate: date(employee.joinDate),
+        exitDate: null,
+        probationEndDate: employee.probationEndDate ? date(employee.probationEndDate) : null,
+        workingScheduleId: employee.workingScheduleId,
+        panMasked: employee.panMasked,
+        version: 1,
+        managerId: null,
+      })),
+    }),
+  );
+
+  await createInChunks('bank details', scale.employees, (batch) =>
+    prisma.employeeBankDetail.createMany({
+      data: batch.map((employee) => ({
+        employeeId: employee.id,
+        ...employee.bank,
+        verifiedAt: new Date('2026-01-05T10:00:00.000Z'),
+      })),
+    }),
+  );
+
+  await createInChunks('contracts', scale.contracts, (batch) =>
+    prisma.contract.createMany({
+      data: batch.map((contract) => ({
+        ...contract,
+        startDate: date(contract.startDate),
+        endDate: contract.endDate ? date(contract.endDate) : null,
+      })),
+    }),
+  );
+
+  await createInChunks('attendance', scale.attendance, (batch) =>
+    prisma.attendance.createMany({
+      data: batch.map((record) => ({ ...record, date: date(record.date) })),
+    }),
+  );
+
+  await createInChunks('leave allocations', scale.leaveAllocations, (batch) =>
+    prisma.leaveAllocation.createMany({
+      data: batch.map((allocation) => ({
+        ...allocation,
+        validFrom: date(allocation.validFrom),
+        validTo: date(allocation.validTo),
+      })),
+    }),
+  );
+
+  await createInChunks('leave requests', scale.leaveRequests, (batch) =>
+    prisma.leaveRequest.createMany({
+      data: batch.map((request) => ({
+        ...request,
+        fromDate: date(request.fromDate),
+        toDate: date(request.toDate),
+        decidedAt: new Date(request.decidedAt),
+        createdAt: new Date(request.createdAt),
+      })),
+    }),
+  );
+}
+
 async function main() {
   await clearDatabase();
   await seedReferenceData();
   await seedPeople();
+  // Leave types and salary rules must exist before the scaled workforce
+  // references them, so payroll inputs are seeded first.
   await seedPayrollInputs();
+  await seedScaleWorkforce();
   await seedPayrunsAndEvidence();
 
-  const [users, departments, employees, contracts, attendance, payruns] = await prisma.$transaction(
-    [
-      prisma.user.count(),
-      prisma.department.count(),
-      prisma.employee.count(),
-      prisma.contract.count(),
-      prisma.attendance.count(),
-      prisma.payrun.count(),
-    ],
-  );
+  // Count every persisted table, so the reported total is the real dataset
+  // size rather than a subset of the tables that happen to be interesting.
+  const counts = {
+    users: await prisma.user.count(),
+    departments: await prisma.department.count(),
+    jobPositions: await prisma.jobPosition.count(),
+    workingSchedules: await prisma.workingSchedule.count(),
+    scheduleLines: await prisma.scheduleLine.count(),
+    holidays: await prisma.holiday.count(),
+    employees: await prisma.employee.count(),
+    bankDetails: await prisma.employeeBankDetail.count(),
+    contracts: await prisma.contract.count(),
+    attendance: await prisma.attendance.count(),
+    leaveTypes: await prisma.leaveType.count(),
+    leaveAllocations: await prisma.leaveAllocation.count(),
+    leaveRequests: await prisma.leaveRequest.count(),
+    salaryStructures: await prisma.salaryStructure.count(),
+    salaryRules: await prisma.salaryRule.count(),
+    payruns: await prisma.payrun.count(),
+    payrunMemberships: await prisma.payrunEmployee.count(),
+    documents: await prisma.document.count(),
+    auditEvents: await prisma.auditEvent.count(),
+  };
 
-  console.info(
-    `Seeded PeoplePay360: ${users} users, ${departments} departments, ${employees} employees, ` +
-      `${contracts} contracts, ${attendance} attendance records, ${payruns} payruns.`,
-  );
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+
+  console.info('Seeded PeoplePay360:');
+  for (const [table, value] of Object.entries(counts)) {
+    console.info(`  ${table.padEnd(18)} ${String(value).padStart(6)}`);
+  }
+  console.info(`  ${'TOTAL RECORDS'.padEnd(18)} ${String(total).padStart(6)}`);
 }
 
 main()

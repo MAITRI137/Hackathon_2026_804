@@ -6,6 +6,12 @@ import { requireAuth } from '../middleware/auth.js';
 
 export const bootstrapRouter = Router();
 
+/** How much of the largest tables the browser keeps resident. */
+const ATTENDANCE_WORKING_SET = 4000;
+const ALLOCATION_WORKING_SET = 4000;
+/** Recent-activity window for the shared attendance list. */
+const WORKING_SET_FROM = new Date('2026-09-01T00:00:00.000Z');
+
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const isoInstant = (value: Date | null) => value?.toISOString() ?? null;
 const withoutTimestamps = <T extends { createdAt: unknown; updatedAt: unknown }>(value: T) => {
@@ -57,11 +63,25 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       orderBy: [{ lastName: 'asc' }, { id: 'asc' }],
     }),
     prisma.contract.findMany({ where: selfWhere, orderBy: { startDate: 'desc' } }),
+    // At 5,000 employees the punch log is the largest table in the product.
+    // The client receives a bounded working set — every open check-in (those
+    // are payroll exceptions), the signed-in person's own record, and the most
+    // recent activity — while totals come from the aggregates below.
     prisma.attendance.findMany({
-      where: selfWhere,
+      where:
+        user.role === 'EMPLOYEE'
+          ? selfWhere
+          : {
+              OR: [{ checkIn: { not: null }, checkOut: null }, { date: { gte: WORKING_SET_FROM } }],
+            },
       orderBy: [{ date: 'desc' }, { employeeId: 'asc' }],
+      take: ATTENDANCE_WORKING_SET,
     }),
-    prisma.leaveAllocation.findMany({ where: selfWhere, orderBy: { validFrom: 'desc' } }),
+    prisma.leaveAllocation.findMany({
+      where: selfWhere,
+      orderBy: { validFrom: 'desc' },
+      take: user.role === 'EMPLOYEE' ? 50 : ALLOCATION_WORKING_SET,
+    }),
     prisma.leaveRequest.findMany({ where: selfWhere, orderBy: { createdAt: 'desc' } }),
     canReadSalary
       ? prisma.salaryStructure.findMany({ orderBy: { name: 'asc' } })
@@ -89,9 +109,60 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       : prisma.auditEvent.findMany({ where: { id: '__none__' } }),
   ]);
 
+  // Totals and per-status counts are aggregated in SQL. A screen never loads a
+  // collection in order to count or chart it.
+  const [
+    employeeCount,
+    contractCount,
+    attendanceCount,
+    allocationCount,
+    leaveRequestCount,
+    payrunMemberCount,
+    documentCount,
+    auditCount,
+    attendanceByStatus,
+  ] = await prisma.$transaction([
+    prisma.employee.count(),
+    prisma.contract.count(),
+    prisma.attendance.count(),
+    prisma.leaveAllocation.count(),
+    prisma.leaveRequest.count(),
+    prisma.payrunEmployee.count(),
+    prisma.document.count(),
+    prisma.auditEvent.count(),
+    prisma.attendance.groupBy({
+      by: ['status'],
+      _count: true,
+      orderBy: { status: 'asc' },
+      where: { date: { gte: WORKING_SET_FROM } },
+    }),
+  ]);
+
   response.json({
     data: {
       session: { user },
+      counts: {
+        employees: employeeCount,
+        contracts: contractCount,
+        attendance: attendanceCount,
+        leaveAllocations: allocationCount,
+        leaveRequests: leaveRequestCount,
+        payrunMemberships: payrunMemberCount,
+        documents: documentCount,
+        auditEvents: auditCount,
+        total:
+          employeeCount +
+          contractCount +
+          attendanceCount +
+          allocationCount +
+          leaveRequestCount +
+          payrunMemberCount +
+          documentCount +
+          auditCount,
+      },
+      attendanceSummary: Object.fromEntries(
+        attendanceByStatus.map((row) => [row.status, row._count]),
+      ),
       departments: departments.map((item) => ({
         ...item,
         monthlyBudget: item.monthlyBudget.toFixed(2),

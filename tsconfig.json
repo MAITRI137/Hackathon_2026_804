@@ -8,6 +8,10 @@
     "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
     "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["shared/*"]
+    },
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

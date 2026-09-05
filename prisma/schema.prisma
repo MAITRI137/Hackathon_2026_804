@@ -6,3 +6,502 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Role {
+  EMPLOYEE
+  HR_MANAGER
+  HR_PAYROLL_USER
+  HR_PAYROLL_MANAGER
+  ADMIN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  PROBATION
+  NOTICE
+  EXITED
+  ARCHIVED
+}
+
+enum EmployeeType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  EARLY_EXIT
+  MISSING_CHECKOUT
+  OVERTIME
+  ABSENT
+  HOLIDAY
+  WEEKLY_OFF
+  ON_LEAVE
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REFUSED
+  CANCELLED
+}
+
+enum RuleCategory {
+  BASIC
+  ALLOWANCES
+  GROSS
+  DEDUCTIONS
+  NET
+}
+
+enum RuleType {
+  FIXED
+  PERCENTAGE
+  FORMULA
+}
+
+enum PayrunStatus {
+  DRAFT
+  COMPUTED
+  VALIDATED
+  PAID
+}
+
+enum PayslipStatus {
+  DRAFT
+  COMPUTED
+  VALIDATED
+  PAID
+  CANCELLED
+}
+
+model User {
+  id                String     @id
+  email             String     @unique
+  passwordHash      String
+  role              Role
+  employeeId        String?    @unique
+  displayName       String
+  initials          String
+  isActive          Boolean    @default(true)
+  lastLoginAt       DateTime?  @db.Timestamptz(3)
+  failedAttempts    Int        @default(0)
+  lockedUntil       DateTime?  @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
+  employee          Employee?  @relation(fields: [employeeId], references: [id])
+  createdPayruns    Payrun[]
+  uploadedDocuments Document[]
+}
+
+model Department {
+  id            String        @id
+  name          String        @unique
+  code          String        @unique
+  parentId      String?
+  managerId     String?
+  monthlyBudget Decimal       @db.Decimal(18, 2)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+  parent        Department?   @relation("DepartmentTree", fields: [parentId], references: [id])
+  children      Department[]  @relation("DepartmentTree")
+  manager       Employee?     @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees     Employee[]    @relation("EmployeeDepartment")
+  positions     JobPosition[]
+  contracts     Contract[]
+
+  @@index([parentId])
+  @@index([managerId])
+}
+
+model JobPosition {
+  id           String      @id
+  title        String
+  departmentId String?
+  level        String
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+  department   Department? @relation(fields: [departmentId], references: [id])
+  employees    Employee[]
+  contracts    Contract[]
+
+  @@index([departmentId])
+}
+
+model WorkingSchedule {
+  id           String         @id
+  name         String         @unique
+  timezone     String
+  hoursPerWeek Decimal        @db.Decimal(6, 2)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+  lines        ScheduleLine[]
+  employees    Employee[]
+  contracts    Contract[]
+}
+
+model ScheduleLine {
+  id           String          @id @default(cuid())
+  scheduleId   String
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  breakMinutes Int
+  schedule     WorkingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, dayOfWeek, startTime])
+  @@index([scheduleId, dayOfWeek])
+}
+
+model Holiday {
+  id         String   @id
+  name       String
+  date       DateTime @db.Date
+  isOptional Boolean  @default(false)
+
+  @@unique([date, name])
+}
+
+model Employee {
+  id                 String              @id
+  employeeCode       String              @unique
+  firstName          String
+  lastName           String
+  fullName           String
+  initials           String
+  email              String              @unique
+  phone              String
+  departmentId       String
+  jobPositionId      String
+  managerId          String?
+  employeeType       EmployeeType
+  status             EmployeeStatus
+  joinDate           DateTime            @db.Date
+  exitDate           DateTime?           @db.Date
+  probationEndDate   DateTime?           @db.Date
+  workingScheduleId  String
+  panMasked          String?
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  department         Department          @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  jobPosition        JobPosition         @relation(fields: [jobPositionId], references: [id])
+  manager            Employee?           @relation("EmployeeManager", fields: [managerId], references: [id])
+  directReports      Employee[]          @relation("EmployeeManager")
+  managedDepartments Department[]        @relation("DepartmentManager")
+  workingSchedule    WorkingSchedule     @relation(fields: [workingScheduleId], references: [id])
+  user               User?
+  bank               EmployeeBankDetail?
+  contracts          Contract[]
+  attendance         Attendance[]
+  leaveAllocations   LeaveAllocation[]
+  leaveRequests      LeaveRequest[]
+  payruns            PayrunEmployee[]
+  payslips           Payslip[]
+  documents          Document[]
+
+  @@index([departmentId, status])
+  @@index([managerId])
+  @@index([lastName, id])
+}
+
+model EmployeeBankDetail {
+  employeeId          String    @id
+  accountName         String
+  accountNumberMasked String
+  ifsc                String
+  bankName            String
+  verifiedAt          DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model Contract {
+  id                String          @id
+  contractRef       String          @unique
+  employeeId        String
+  startDate         DateTime        @db.Date
+  endDate           DateTime?       @db.Date
+  departmentId      String
+  jobPositionId     String
+  employeeType      EmployeeType
+  wage              Decimal         @db.Decimal(18, 2)
+  salaryStructureId String
+  workingScheduleId String
+  status            ContractStatus
+  notes             String          @default("")
+  version           Int             @default(1)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+  employee          Employee        @relation(fields: [employeeId], references: [id])
+  department        Department      @relation(fields: [departmentId], references: [id])
+  jobPosition       JobPosition     @relation(fields: [jobPositionId], references: [id])
+  salaryStructure   SalaryStructure @relation(fields: [salaryStructureId], references: [id])
+  workingSchedule   WorkingSchedule @relation(fields: [workingScheduleId], references: [id])
+  payslips          Payslip[]
+  documents         Document[]
+
+  @@index([employeeId, startDate, endDate])
+  @@index([status, endDate])
+}
+
+model Attendance {
+  id               String           @id
+  employeeId       String
+  date             DateTime         @db.Date
+  checkIn          String?
+  checkOut         String?
+  workedMinutes    Int              @default(0)
+  status           AttendanceStatus
+  source           String
+  correctionReason String?
+  correctedById    String?
+  correctedAt      DateTime?        @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+  employee         Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date, status])
+  @@index([employeeId, date])
+}
+
+model LeaveType {
+  id                   String            @id
+  name                 String            @unique
+  code                 String            @unique
+  isPaid               Boolean
+  requiresAllocation   Boolean
+  allowNegativeBalance Boolean
+  carryForwardMax      Decimal           @db.Decimal(6, 2)
+  accrualPerMonth      Decimal           @db.Decimal(6, 2)
+  colorToken           String
+  allocations          LeaveAllocation[]
+  requests             LeaveRequest[]
+}
+
+model LeaveAllocation {
+  id             String    @id
+  employeeId     String
+  leaveTypeId    String
+  allocated      Decimal   @db.Decimal(6, 2)
+  used           Decimal   @db.Decimal(6, 2)
+  carriedForward Decimal   @db.Decimal(6, 2)
+  validFrom      DateTime  @db.Date
+  validTo        DateTime  @db.Date
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([employeeId, leaveTypeId, validFrom])
+  @@index([employeeId, leaveTypeId])
+}
+
+model LeaveRequest {
+  id            String         @id
+  employeeId    String
+  leaveTypeId   String
+  fromDate      DateTime       @db.Date
+  toDate        DateTime       @db.Date
+  halfDayStart  Boolean        @default(false)
+  halfDayEnd    Boolean        @default(false)
+  days          Decimal        @db.Decimal(5, 2)
+  reason        String
+  status        ApprovalStatus
+  approverId    String?
+  decidedAt     DateTime?      @db.Timestamptz(3)
+  decisionNote  String?
+  autoDecidedBy String?
+  createdAt     DateTime       @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType     LeaveType      @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([employeeId, status])
+  @@index([status, fromDate])
+  @@index([approverId, status])
+}
+
+model SalaryStructure {
+  id          String       @id
+  name        String
+  code        String       @unique
+  description String
+  isActive    Boolean      @default(true)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  rules       SalaryRule[]
+  contracts   Contract[]
+  payruns     Payrun[]
+  payslips    Payslip[]
+}
+
+model SalaryRule {
+  id               String          @id
+  structureId      String
+  code             String
+  name             String
+  category         RuleCategory
+  sequence         Int
+  type             RuleType
+  amount           Decimal?        @db.Decimal(18, 2)
+  percentage       Decimal?        @db.Decimal(8, 4)
+  baseCode         String?
+  formula          String?
+  conditionFormula String?
+  isActive         Boolean         @default(true)
+  ruleVersion      Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  structure        SalaryStructure @relation(fields: [structureId], references: [id])
+
+  @@unique([structureId, code, ruleVersion])
+  @@index([structureId, sequence])
+}
+
+model Payrun {
+  id                String           @id
+  name              String
+  periodStart       DateTime         @db.Date
+  periodEnd         DateTime         @db.Date
+  salaryStructureId String
+  status            PayrunStatus
+  isFrozen          Boolean          @default(false)
+  frozenAt          DateTime?        @db.Timestamptz(3)
+  reopenReason      String?
+  expectedWorkDays  Int
+  computedAt        DateTime?        @db.Timestamptz(3)
+  validatedAt       DateTime?        @db.Timestamptz(3)
+  paidAt            DateTime?        @db.Timestamptz(3)
+  inputSnapshotHash String?
+  createdById       String
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+  salaryStructure   SalaryStructure  @relation(fields: [salaryStructureId], references: [id])
+  createdBy         User             @relation(fields: [createdById], references: [id])
+  employees         PayrunEmployee[]
+  payslips          Payslip[]
+
+  @@unique([periodStart, salaryStructureId])
+  @@index([status, periodStart])
+}
+
+model PayrunEmployee {
+  payrunId        String
+  employeeId      String
+  includedAt      DateTime  @default(now()) @db.Timestamptz(3)
+  excludedAt      DateTime? @db.Timestamptz(3)
+  exclusionReason String?
+  payrun          Payrun    @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+
+  @@id([payrunId, employeeId])
+  @@index([employeeId])
+}
+
+model Payslip {
+  id              String          @id
+  payslipRef      String          @unique
+  payrunId        String
+  employeeId      String
+  contractId      String
+  periodStart     DateTime        @db.Date
+  periodEnd       DateTime        @db.Date
+  structureId     String
+  status          PayslipStatus
+  expectedDays    Int
+  workedDays      Decimal         @db.Decimal(6, 2)
+  paidLeaveDays   Decimal         @db.Decimal(6, 2)
+  unpaidLeaveDays Decimal         @db.Decimal(6, 2)
+  overtimeMinutes Int
+  gross           Decimal         @db.Decimal(18, 2)
+  totalDeductions Decimal         @db.Decimal(18, 2)
+  net             Decimal         @db.Decimal(18, 2)
+  inputSnapshot   Json
+  snapshotHash    String
+  computedAt      DateTime        @db.Timestamptz(3)
+  isDuplicate     Boolean         @default(false)
+  deliveryStatus  String          @default("PENDING")
+  deliveryError   String?
+  deliveredAt     DateTime?       @db.Timestamptz(3)
+  paymentStatus   String          @default("UNPAID")
+  payrun          Payrun          @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  contract        Contract        @relation(fields: [contractId], references: [id])
+  structure       SalaryStructure @relation(fields: [structureId], references: [id])
+  lines           PayslipLine[]
+
+  @@unique([payrunId, employeeId])
+  @@index([employeeId, periodStart])
+  @@index([payrunId, status])
+}
+
+model PayslipLine {
+  id              String       @id @default(cuid())
+  payslipId       String
+  ruleId          String
+  ruleCode        String
+  ruleName        String
+  ruleVersion     Int
+  category        RuleCategory
+  sequence        Int
+  formulaSnapshot String
+  inputsSnapshot  Json
+  sourceRefs      Json
+  amount          Decimal      @db.Decimal(18, 2)
+  payslip         Payslip      @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  @@index([payslipId, sequence])
+}
+
+model Document {
+  id             String    @id
+  employeeId     String?
+  contractId     String?
+  category       String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  visibility     String
+  uploadedAt     DateTime  @db.Timestamptz(3)
+  uploadedById   String
+  acknowledgedAt DateTime? @db.Timestamptz(3)
+  employee       Employee? @relation(fields: [employeeId], references: [id])
+  contract       Contract? @relation(fields: [contractId], references: [id])
+  uploadedBy     User      @relation(fields: [uploadedById], references: [id])
+
+  @@index([employeeId, category])
+}
+
+model AuditEvent {
+  id         String   @id
+  at         DateTime @db.Timestamptz(3)
+  actorId    String
+  actorName  String
+  actorRole  String
+  action     String
+  entityType String
+  entityId   String
+  summary    String
+  before     Json?
+  after      Json?
+
+  @@index([entityType, entityId, at])
+  @@index([actorId, at])
+}

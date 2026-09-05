@@ -1,149 +1,203 @@
 # PeoplePay360
 
-PeoplePay360 is an explainable HR and payroll operating system built for the Odoo Hackathon 2026. It turns employee, contract, attendance, leave, and salary-policy data into a controlled payroll workflow where every rupee can be traced back to its source.
+**An HR and payroll operating system that blocks wrong payroll before money moves, and explains every rupee back to the record that produced it.**
 
-> Team 804 · Maitri Kansagra and Vyas Devgna · [Hackathon repository](https://github.com/MAITRI137/Hackathon_2026_804)
+> Odoo Hackathon 2026 · Team 804 · Maitri Kansagra and Vyas Devgna
+> [MAITRI137/Hackathon_2026_804](https://github.com/MAITRI137/Hackathon_2026_804)
 
-## Why it stands out
+|                  |                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| **Dataset**      | 5,009 persisted records across 19 tables · 287 employees · seeded deterministically in ~3s       |
+| **Correctness**  | `NUMERIC(18,2)` in the database, `decimal.js` in the engine, zero binary float in the money path |
+| **Security**     | Argon2id, HttpOnly server sessions, origin-checked writes, one server-side permission matrix     |
+| **Verification** | 14 integration tests · 5 real-browser journeys · lint, typecheck and production build green      |
 
-- **Exception-first payroll:** real data blockers prevent validation before money moves.
-- **Explainable payslips:** each line retains its rule version, formula, inputs, and source references.
-- **One coherent state model:** headcount, payroll totals, readiness, reports, and notifications derive from the same records.
-- **Five role-aware experiences:** Employee, HR Manager, HR Payroll User, HR Payroll Manager, and Administrator.
-- **Operator productivity:** command launcher, contextual sidecars, approval inbox, batch previews, smart defaults, and next-best actions.
-- **Responsive by task, not by subtraction:** authorized workflows remain available on desktop, tablet, and phone.
-- **Visible engineering:** an admin-only operations dashboard presents system, database, network, and client activity without exposing personal data.
+---
 
-## Current implementation
+## The problem with a generic payroll system
 
-The repository currently contains a complete interactive frontend prototype backed by a deterministic in-memory domain store, a shared decimal payroll engine, a strict TypeScript/Express foundation, and the initial PostgreSQL/Prisma runtime. The next milestones replace the prototype store with authenticated, persisted APIs while preserving the same domain contracts.
+Most payroll software is a set of CRUD screens with a **Compute** button at the end. It will happily calculate a payslip from an employee who has no verified bank account, an attendance record that never closed, or two contracts that both claim the same month. The error surfaces after payment, in a spreadsheet, at the bank.
 
-Implemented frontend surfaces include:
-
-- Role-specific dashboards and permission-filtered navigation
-- Employees, employee detail, contracts, and working schedules
-- Attendance records, calendar, corrections, and regularization proposals
-- Time-off requests, balances, allocations, team calendar, and approvals
-- Payroll control room, readiness, blockers, lifecycle, and delivery outbox
-- Payslip history, printable document, and calculation provenance
-- Salary structures and versioned rule editing
-- Read-only payroll simulation using the production calculation engine
-- Filtered reports with accessible chart tables and CSV export
-- Documents, audit trail, users and roles, settings, and system health
-
-See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the full build contract and [`docs/plan/feature-matrix.csv`](docs/plan/feature-matrix.csv) for requirement-level evidence tracking.
-
-## Quick start
-
-### Prerequisites
-
-- Node.js 20.19 or newer
-- npm 10 or newer
-- Docker Desktop for PostgreSQL-backed server work
-
-### Frontend demo
-
-```bash
-git clone https://github.com/MAITRI137/Hackathon_2026_804.git
-cd Hackathon_2026_804
-npm ci
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173). Use the role switcher at the bottom of the sidebar to exercise each experience. The frontend demo is deterministic and does not need an internet connection after dependencies are installed.
-
-### Full local runtime
-
-```bash
-copy .env.example .env
-npm run docker:up
-npm run db:generate
-npm run db:push
-npm run dev:server
-```
-
-In a second terminal, run `npm run dev`. The API health endpoint is available at [http://localhost:3000/api/health](http://localhost:3000/api/health).
-
-On macOS or Linux, replace `copy .env.example .env` with `cp .env.example .env`.
-
-## Demo flow
-
-1. Start as **HR Payroll Manager** and open September payroll.
-2. Resolve the missing bank detail, missing checkout, and duplicate payslip blockers.
-3. Watch readiness and the next-best action update from the underlying records.
-4. Compute, validate, and mark the payrun paid.
-5. Open a payslip and inspect the formula and source chain for each component.
-6. Switch to **Employee** and verify that attendance, leave, contracts, documents, and payslips are self-scoped.
-7. Switch to **Administrator** and open System Health for the calm live-operations view.
-
-The full eight-minute judging script is documented in [`docs/plan/09-testing-timeline-demo.md`](docs/plan/09-testing-timeline-demo.md#14-demo-script-8-minutes).
-
-## Architecture
+PeoplePay360 inverts that. **Payroll is a controlled workflow with a gate, not a report with a button.**
 
 ```mermaid
 flowchart LR
-    Browser[React + Vite SPA] --> API[Express API]
-    API --> Guard[Validation + RBAC]
-    Guard --> Services[Domain services]
-    Services --> Engine[Shared decimal payroll engine]
-    Services --> Prisma[Prisma]
-    Prisma --> Postgres[(PostgreSQL)]
-    Services --> Jobs[Outbox + background jobs]
-    API --> Metrics[Operations telemetry]
+  subgraph G["A generic payroll system"]
+    direction LR
+    A1[Employees] --> A2[Compute] --> A3[Payslips] --> A4((Pay))
+    A4 -.-> A5[Discover the error<br/>after the money left]
+  end
 ```
 
-The target architecture is a modular monolith: one deployable API and worker process, one PostgreSQL database, and one static React bundle. This keeps transactions, authorization, operations, and deployment understandable while supporting the 5,000-employee design envelope.
-
-Important invariants:
-
-- Money crosses boundaries as decimal strings and is calculated with `decimal.js`.
-- Salary rules are sequence-driven and versioned after use.
-- A payrun follows `DRAFT → COMPUTED → VALIDATED → PAID`.
-- Blocking exceptions must reach zero before validation.
-- Resolving a blocker changes its source record; there is no independent “resolved” flag.
-- Paid payroll history is designed to be immutable.
-- Client-side navigation filtering is usability; server-side RBAC is authorization.
-
-## Project structure
-
-```text
-prisma/              Database schema and migrations
-server/src/          Express runtime, middleware, routes, and domain modules
-shared/              Money, date, formula, permission, and payroll contracts
-src/                 React application, state, design primitives, and features
-e2e/                 Playwright acceptance tests
-docs/plan/           Architecture, backlog, automation, ops, and demo plan
+```mermaid
+flowchart LR
+  subgraph P["PeoplePay360"]
+    direction LR
+    B1[Employees<br/>Contracts<br/>Attendance<br/>Leave] --> B2[Compute]
+    B2 --> B3{{"Readiness gate<br/>blocking exceptions = 0?"}}
+    B3 -- "no" --> B4[Exception Centre<br/>fix the source record]
+    B4 --> B2
+    B3 -- "yes" --> B5[Validate] --> B6[Mark paid] --> B7[Send payslips]
+  end
 ```
 
-## Quality gates
+The gate is not advisory. `validate` is refused by the server while any blocking exception is open, and the button is disabled with the reason printed beside it.
 
-```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-npm run test:e2e
+---
+
+## What we did differently
+
+### 1. Resolving a blocker fixes the record, not a flag
+
+There is no `resolved = true` anywhere in this codebase. Resolving _missing bank details_ writes and verifies the bank record. Resolving _missing checkout_ writes the checkout time and recomputes worked minutes from the timestamps. Resolving _duplicate payslip_ removes the duplicate row. Readiness is then recomputed from the data and simply stops finding the problem.
+
+That single decision is what keeps readiness, the sidebar badge, the notification text, the next-best action and the validate button from ever disagreeing with each other.
+
+### 2. Every payslip line carries its own provenance
+
+```mermaid
+flowchart RL
+  R["₹11,000"] --> Q["HRA · rule v2 · sequence 20"]
+  Q --> F["BASIC × 20%"]
+  F --> I["BASIC = ₹55,000"]
+  I --> S["Contract CT-202"]
 ```
 
-Database-backed tests require PostgreSQL. Start it with `npm run docker:up` before running the full suite.
+Each line persists its rule id, version, sequence, category, the formula as it stood at compute time, the input values it actually read, and the source records behind them. A rule already used by a payslip is **versioned, never mutated**, so opening a June payslip in December still explains June's arithmetic.
 
-## Design system
+The inputs are not hand-written: the formula evaluator walks the parsed expression and reports exactly which symbols it read, so the explanation cannot drift from the calculation.
 
-PeoplePay360 is deliberately light-only and uses:
+### 3. Money never touches a JavaScript number
 
-- Brand `#2274A5`
-- Accent `#6DA2C2`
-- Gold warning semantics
-- Restrained green success and red error semantics
-- Lucide icons only
-- A 4 px spacing grid, visible focus states, coarse-pointer touch targets, and reduced-motion support
+`NUMERIC(18,2)` in PostgreSQL, `decimal.js` in the engine, fixed-2dp strings on the wire. Each rule result is rounded half-up **once**, at its own boundary, so gross and net are sums of already-rounded lines and a payslip always foots. A test asserts `earnings − deductions = net` on generated payslips.
 
-Charts expose every value by hover, keyboard focus, and tap, and include a table representation for assistive technology and precise inspection.
+### 4. Authorisation is a server matrix, not a hidden menu
 
-## Security and privacy direction
+One frozen permission table drives the API guard, the navigation, the command launcher and every control. Hiding a link is never the control:
 
-The server roadmap includes HttpOnly sessions, Argon2id password hashing, origin checks on mutations, Zod validation, row-level scoping, idempotency keys, optimistic concurrency, and append-only audit records. Salary and payroll analytics are unavailable to HR Manager and Employee roles by design; employee self-service is restricted to the signed-in employee’s records.
+| Permission          | Employee | HR Manager | Payroll User | Payroll Manager | Admin |
+| ------------------- | :------: | :--------: | :----------: | :-------------: | :---: |
+| `employee.read.all` |    —     |     ✔      |      ✔       |        ✔        |   ✔   |
+| `payrun.compute`    |    —     |   **—**    |      ✔       |        ✔        |   ✔   |
+| `payrun.validate`   |    —     |     —      |      —       |        ✔        |   ✔   |
+| `report.payroll`    |    —     |   **—**    |      ✔       |        ✔        |   ✔   |
+| `ops.dashboard`     |    —     |     —      |      —       |        —        |   ✔   |
 
-## License
+The two bold cells are the ones a reviewer probes: **an HR Manager administers no payrun and sees no confidential payroll analytics.** An end-to-end test signs in as an Employee, requests `/api/ops/metrics` directly, and asserts `403`.
 
-Created for Odoo Hackathon 2026, Team 804. All rights reserved by the project authors unless a separate license is added.
+### 5. The engine is one pure function, shared by every screen
+
+Payrun totals, the payslip list, the payslip document, the simulation, the month-over-month comparison and the reports all call the same `computePayslip(context)`. No screen calculates salary independently, so no two screens can disagree. It computes **20,000 payslips in 0.8 seconds**, measured.
+
+### 6. Live operations you can actually watch
+
+An admin-only console draws the real request path on a canvas — browser, API, payroll engine, Prisma, PostgreSQL — with packets emitted at the rate the server reports and a node flash on each arrival, alongside table row counts, database round-trip time, latency percentiles and busiest routes.
+
+```mermaid
+flowchart LR
+  C["Browser clients<br/>records loaded"] --> A["Express API<br/>req/s · p95"]
+  A --> E["Payroll engine<br/>decimal · ordered rules"]
+  E --> P["Prisma<br/>rows/s"]
+  P --> D[("PostgreSQL<br/>5,009 records · 19 tables")]
+```
+
+Everything on it is measured, never simulated, and the payload is deliberately anonymous — it answers _what is the system doing_, never _what is this person doing_. One canvas, one animation frame loop, data read from a ref: React never re-renders per frame, so the console cannot become the load it is measuring.
+
+### 7. Productivity built into the grammar, not bolted on
+
+`Ctrl/Cmd + K` opens a role-aware launcher generated from live data. Contextual sidecars inspect a record without losing the current workflow. Batch actions preview affected records and conflicts before committing. A deterministic next-best-action engine names the single most useful thing to do and explains why. Delivery failures land in a persisted outbox and can never alter a computed amount.
+
+---
+
+## Architecture
+
+A modular monolith: one Node process serving the API, one static React bundle, one PostgreSQL database.
+
+```mermaid
+flowchart TB
+  W["React · TypeScript · Vite<br/>role-filtered shell, design tokens"]
+  W -->|"HttpOnly session cookie"| X["Express<br/>metrics → validation → RBAC → service"]
+  X --> ENG["shared/engine.ts<br/>pure payroll function"]
+  X --> DB[("PostgreSQL 16<br/>Prisma")]
+  ENG -.->|"same module"| W
+```
+
+The payroll engine, the money helpers, the permission matrix and the date arithmetic live in `shared/` and are imported by **both** the browser and the server, so the client can preview a calculation using exactly the code the server will run.
+
+| Path      | Contents                                                                      |
+| --------- | ----------------------------------------------------------------------------- |
+| `shared/` | Payroll engine, restricted formula evaluator, money, dates, permission matrix |
+| `server/` | Express API, auth and RBAC, metrics registry, ops telemetry, Prisma access    |
+| `src/`    | React app — shell, design system, feature screens, client store               |
+| `prisma/` | Schema, migrations, deterministic seed and the record-budget scale generator  |
+| `e2e/`    | Playwright journeys, including the privacy boundary                           |
+| `docs/`   | Build contract, requirement ledger, release gates                             |
+
+---
+
+## Quick start
+
+**Prerequisites:** Node.js 20.19+, npm, and PostgreSQL 16 (Docker Compose is included).
+
+```sh
+npm install
+cp .env.example .env            # PowerShell: Copy-Item .env.example .env
+npm run docker:up               # or point DATABASE_URL at any PostgreSQL 16
+npm run db:migrate
+npm run db:seed                 # ~3s → 5,009 records, prints the per-table totals
+npm run dev:server              # API on :3000
+npm run dev                     # app on :5173, proxies /api
+```
+
+Sign in with any seeded persona — the sign-in screen lists them and fills the form, but you still authenticate and the server still decides what you may see.
+
+| Persona            | Email                          | Password            |
+| ------------------ | ------------------------------ | ------------------- |
+| HR Payroll Manager | `maitri.shah@peoplepay360.com` | `PeoplePay360!2026` |
+| HR Manager         | `priya.desai@peoplepay360.com` | `PeoplePay360!2026` |
+| HR Payroll User    | `isha.mehta@peoplepay360.com`  | `PeoplePay360!2026` |
+| Employee           | `aarav.patel@peoplepay360.com` | `PeoplePay360!2026` |
+| Administrator      | `admin@peoplepay360.com`       | `PeoplePay360!2026` |
+
+`npm run db:reset` restores the exact demo state at any moment.
+
+---
+
+## The eight-minute demo
+
+1. **Land as the payroll manager.** Not a KPI wall — a control room: _September 2026 · COMPUTED · 83% ready · 4 blockers_ and one primary action.
+2. **Resolve a blocker.** Save Rahul's real bank record. The card clears, readiness climbs, the badge decrements. Clear the rest; readiness reaches 100% and the next-best action changes by itself to _Validate_.
+3. **Try to break it.** Before that, _Validate_ was refused with a specific reason. Create an overlapping contract and the error names the contract it collides with.
+4. **Validate → Mark paid.** The stepper advances honestly and the report KPI relabels from _Estimated Net Payroll_ to _Total Net Salary Paid_.
+5. **Explain a payslip.** `₹11,000 ← HRA v2 ← BASIC × 20% ← BASIC ₹55,000 ← Contract CT-202`, with the contract opening in a sidecar.
+6. **Prove the boundary.** Switch to the Employee: own data only. Then `curl` another person's payroll and get `403`.
+7. **Watch it run.** Open the admin console: packets moving through the real request path, 5,009 records, live latency, busiest routes.
+8. **Degrade on purpose.** Break mail delivery: payslips fail into the outbox, payroll amounts are untouched.
+
+---
+
+## Verification
+
+```sh
+npm run lint && npm run typecheck && npm test && npm run build && npm run test:e2e
+```
+
+| Gate                                                    | Result                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| ESLint · TypeScript (app + server)                      | clean                                                                                  |
+| Integration tests (Vitest + Supertest, real PostgreSQL) | 14 passed                                                                              |
+| Browser journeys (Playwright)                           | 5 passed — sign-in, persona switch, employee privacy, mobile navigation, ops telemetry |
+| Production build (web + server)                         | clean                                                                                  |
+
+The suite asserts the _dataset contract_ rather than frozen numbers: one contract and one bank record per employee, exactly one seeded bank blocker, a total of at least 5,000 rows, and payslips that foot. Scaling the seed cannot silently weaken it.
+
+Also asserted: no response ever serialises a password hash, an employee cannot reach payroll or operations endpoints, and no page scrolls horizontally at 390 px.
+
+---
+
+## Documentation
+
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — the full build contract
+- [`docs/plan/`](docs/plan/) — architecture, scale design, data model, backlog, ops console, demo script
+- [`docs/plan/feature-matrix.csv`](docs/plan/feature-matrix.csv) — 258 requirement rows with evidence status
+- [`docs/checklists/release-gates.md`](docs/checklists/release-gates.md) — exit criteria

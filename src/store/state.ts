@@ -64,6 +64,12 @@ export interface AppState {
   readNotificationIds: string[];
   dismissedNotificationIds: string[];
 
+  /** Real dataset totals from the server. Screens show these rather than
+   *  counting a collection the browser happens to hold. */
+  counts: (Record<string, number> & { total: number }) | null;
+  /** Attendance status totals for the open period, aggregated in SQL. */
+  attendanceSummary: Record<string, number> | null;
+
   /* session */
   currentUserId: string;
   activePayrunId: string;
@@ -110,6 +116,9 @@ export function createInitialState(): AppState {
     settings: { ...seed.settingsSeed },
     readNotificationIds: [],
     dismissedNotificationIds: [],
+
+    counts: null,
+    attendanceSummary: null,
 
     currentUserId: 'usr-pm',
     activePayrunId: seed.ACTIVE_PAYRUN_ID,

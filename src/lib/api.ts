@@ -21,6 +21,31 @@ interface ErrorEnvelope {
 
 export interface BootstrapPayload extends Partial<AppState> {
   session: { user: AppState['users'][number] };
+  counts?: AppState['counts'];
+  attendanceSummary?: AppState['attendanceSummary'];
+}
+
+/** Measured operations telemetry. Every field comes from a real observation. */
+export interface OpsMetrics {
+  capturedAt: string;
+  database: {
+    online: boolean;
+    roundTripMs: number;
+    totalRecords: number;
+    tables: { table: string; rows: number }[];
+  };
+  process: {
+    uptimeSeconds: number;
+    heapUsedMb: number;
+    heapTotalMb: number;
+    nodeVersion: string;
+  };
+  uptimeSeconds: number;
+  requests: { total: number; errors: number; perSecond: number; series: number[] };
+  reads: { total: number; series: number[] };
+  latency: { p50: number; p95: number; p99: number };
+  queryActivity: { queries: number; averageMs: number };
+  routes: { route: string; count: number; errors: number; averageMs: number; maxMs: number }[];
 }
 
 export class ApiError extends Error {
@@ -63,6 +88,10 @@ export async function connectDemoRole(role: Role): Promise<BootstrapPayload> {
     body: JSON.stringify({ email: ROLE_EMAIL[role], password: DEMO_PASSWORD }),
   });
   return api<BootstrapPayload>('/bootstrap');
+}
+
+export function fetchOpsMetrics(): Promise<OpsMetrics> {
+  return api<OpsMetrics>('/ops/metrics');
 }
 
 export function signOut() {

@@ -114,22 +114,46 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
   const [
     employeeCount,
     contractCount,
+    bankDetailCount,
     attendanceCount,
     allocationCount,
     leaveRequestCount,
+    leaveTypeCount,
+    payrunCount,
     payrunMemberCount,
+    payslipCount,
     documentCount,
     auditCount,
+    departmentCount,
+    jobPositionCount,
+    scheduleCount,
+    scheduleLineCount,
+    holidayCount,
+    structureCount,
+    ruleCount,
+    userCount,
     attendanceByStatus,
   ] = await prisma.$transaction([
     prisma.employee.count(),
     prisma.contract.count(),
+    prisma.employeeBankDetail.count(),
     prisma.attendance.count(),
     prisma.leaveAllocation.count(),
     prisma.leaveRequest.count(),
+    prisma.leaveType.count(),
+    prisma.payrun.count(),
     prisma.payrunEmployee.count(),
+    prisma.payslip.count(),
     prisma.document.count(),
     prisma.auditEvent.count(),
+    prisma.department.count(),
+    prisma.jobPosition.count(),
+    prisma.workingSchedule.count(),
+    prisma.scheduleLine.count(),
+    prisma.holiday.count(),
+    prisma.salaryStructure.count(),
+    prisma.salaryRule.count(),
+    prisma.user.count(),
     prisma.attendance.groupBy({
       by: ['status'],
       _count: true,
@@ -137,6 +161,25 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       where: { date: { gte: WORKING_SET_FROM } },
     }),
   ]);
+  // Report what this request actually read, so the operations console shows
+  // live read volume measured at the boundary rather than an estimate.
+  response.locals.recordsRead =
+    departments.length +
+    jobPositions.length +
+    schedules.length +
+    holidays.length +
+    leaveTypes.length +
+    employees.length +
+    contracts.length +
+    attendance.length +
+    leaveAllocations.length +
+    leaveRequests.length +
+    salaryStructures.length +
+    salaryRules.length +
+    payruns.length +
+    payslips.length +
+    documents.length +
+    audit.length;
 
   response.json({
     data: {
@@ -144,21 +187,47 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       counts: {
         employees: employeeCount,
         contracts: contractCount,
+        bankDetails: bankDetailCount,
         attendance: attendanceCount,
         leaveAllocations: allocationCount,
         leaveRequests: leaveRequestCount,
+        leaveTypes: leaveTypeCount,
+        payruns: payrunCount,
         payrunMemberships: payrunMemberCount,
+        payslips: payslipCount,
         documents: documentCount,
         auditEvents: auditCount,
+        departments: departmentCount,
+        jobPositions: jobPositionCount,
+        workingSchedules: scheduleCount,
+        scheduleLines: scheduleLineCount,
+        holidays: holidayCount,
+        salaryStructures: structureCount,
+        salaryRules: ruleCount,
+        users: userCount,
+        // "Total" means every persisted row, so the figure a screen shows is
+        // the dataset size and not a subset that happens to be interesting.
         total:
           employeeCount +
           contractCount +
+          bankDetailCount +
           attendanceCount +
           allocationCount +
           leaveRequestCount +
+          leaveTypeCount +
+          payrunCount +
           payrunMemberCount +
+          payslipCount +
           documentCount +
-          auditCount,
+          auditCount +
+          departmentCount +
+          jobPositionCount +
+          scheduleCount +
+          scheduleLineCount +
+          holidayCount +
+          structureCount +
+          ruleCount +
+          userCount,
       },
       attendanceSummary: Object.fromEntries(
         attendanceByStatus.map((row) => [row.status, row._count]),

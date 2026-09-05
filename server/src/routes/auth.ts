@@ -30,6 +30,14 @@ const attemptsByIp = new Map<string, number[]>();
 
 export const authRouter = Router();
 
+/**
+ * The only shape a user is allowed to leave the server in.
+ *
+ * Fields are picked explicitly rather than spread: a spread of a Prisma record
+ * carries every column it happens to have — including `passwordHash`,
+ * `failedAttempts` and `lockedUntil` — and TypeScript will not catch that,
+ * because a wider object still satisfies a narrower parameter type.
+ */
 function publicUser(user: {
   id: string;
   email: string;
@@ -40,7 +48,16 @@ function publicUser(user: {
   isActive: boolean;
   lastLoginAt: Date | null;
 }) {
-  return { ...user, lastLoginAt: user.lastLoginAt?.toISOString() ?? null };
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    employeeId: user.employeeId,
+    displayName: user.displayName,
+    initials: user.initials,
+    isActive: user.isActive,
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+  };
 }
 
 function regenerateSession(request: Express.Request) {

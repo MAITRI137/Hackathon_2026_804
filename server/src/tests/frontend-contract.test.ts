@@ -22,7 +22,16 @@ describe('frontend persisted-data contract', () => {
     const payrun = state.payruns.find((item) => item.id === 'PR-2026-09')!;
     const outcome = computePayrun(state, payrun, '2026-09-05T14:30:00+05:30');
 
+    // One payslip per selected employee, and not one contract unresolved.
     expect(outcome.failures).toEqual([]);
-    expect(outcome.payslips).toHaveLength(42);
+    expect(outcome.payslips).toHaveLength(payrun.employeeIds.length);
+    expect(outcome.payslips.length).toBeGreaterThanOrEqual(42);
+    // Every payslip foots: earnings minus deductions equals net.
+    for (const slip of outcome.payslips.slice(0, 50)) {
+      const earnings = slip.lines
+        .filter((line) => line.category === 'BASIC' || line.category === 'ALLOWANCES')
+        .reduce((sum, line) => sum + Number(line.amount), 0);
+      expect(earnings - Number(slip.totalDeductions)).toBeCloseTo(Number(slip.net), 2);
+    }
   });
 });

@@ -67,3 +67,23 @@ describe('session authentication', () => {
     expect(unknown.body.error.message).toBe(wrong.body.error.message);
   });
 });
+
+describe('credential hygiene', () => {
+  it('never serialises a password hash or lockout state to a client', async () => {
+    const agent = request.agent(createApp());
+    const login = await agent
+      .post('/api/auth/login')
+      .set('Origin', validOrigin)
+      .send({ email: 'admin@peoplepay360.com', password: 'PeoplePay360!2026' });
+
+    expect(login.status).toBe(200);
+    const body = JSON.stringify(login.body);
+    expect(body).not.toContain('passwordHash');
+    expect(body).not.toContain('$argon2');
+    expect(body).not.toContain('failedAttempts');
+    expect(body).not.toContain('lockedUntil');
+
+    const me = await agent.get('/api/auth/me');
+    expect(JSON.stringify(me.body)).not.toContain('passwordHash');
+  });
+});

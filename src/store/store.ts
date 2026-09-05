@@ -58,6 +58,8 @@ export function hydrateFromServer(payload: BootstrapPayload): void {
 
     draft.users = [user];
     draft.currentUserId = user.id;
+    draft.counts = payload.counts ?? null;
+    draft.attendanceSummary = payload.attendanceSummary ?? null;
 
     if (payload.payruns?.length) {
       draft.payruns = payload.payruns;

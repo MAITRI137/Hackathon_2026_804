@@ -28,12 +28,7 @@ import {
   rangeOverlaps,
 } from '@shared/dates';
 import type { AppState } from './state';
-import {
-  computeExceptions,
-  computeReadiness,
-  payrunTotals,
-  scheduleCtx,
-} from './payroll';
+import { computeExceptions, computeReadiness, payrunTotals, scheduleCtx } from './payroll';
 import { EXPIRY_HORIZON_DAYS } from '@/data/seed';
 
 /* ── session ───────────────────────────────────────────────── */
@@ -62,9 +57,7 @@ export function visibleEmployees(s: AppState): Employee[] {
 }
 
 export function scopeIds(s: AppState): Set<string> | null {
-  return isSelfScoped(currentRole(s))
-    ? new Set([currentUser(s).employeeId ?? ''])
-    : null;
+  return isSelfScoped(currentRole(s)) ? new Set([currentUser(s).employeeId ?? '']) : null;
 }
 
 /* ── lookups ───────────────────────────────────────────────── */
@@ -414,7 +407,9 @@ export function nextBestAction(s: AppState): NextBestAction {
         tone: 'urgent',
       };
     }
-    const undecided = s.leaveRequests.filter((r) => r.employeeId === me.id && r.status === 'PENDING');
+    const undecided = s.leaveRequests.filter(
+      (r) => r.employeeId === me.id && r.status === 'PENDING',
+    );
     if (undecided.length > 0) {
       return {
         id: 'nba-my-leave',
@@ -648,6 +643,20 @@ export function netTrend(s: AppState, months = 12) {
 export function attendanceHealth(s: AppState, f: ReportFilters) {
   const payrun = payrunById(s, f.payrunId);
   if (!payrun) return [];
+
+  // At full dataset size the browser holds a working set, not every punch.
+  // When the server has aggregated the period in SQL, use that — an unfiltered
+  // chart must never quietly describe only the rows that happen to be loaded.
+  if (s.attendanceSummary && f.departmentId === 'ALL' && f.employeeType === 'ALL') {
+    const total = s.attendanceSummary;
+    return [
+      { id: 'present', label: 'On time', value: total.PRESENT ?? 0 },
+      { id: 'late', label: 'Late', value: total.LATE ?? 0 },
+      { id: 'ot', label: 'Overtime', value: total.OVERTIME ?? 0 },
+      { id: 'absent', label: 'Absent', value: total.ABSENT ?? 0 },
+      { id: 'missing', label: 'Missing checkout', value: total.MISSING_CHECKOUT ?? 0 },
+    ];
+  }
   const ids = new Set(filteredEmployees(s, f).map((e) => e.id));
   const rows = s.attendance.filter(
     (a) => ids.has(a.employeeId) && a.date >= payrun.periodStart && a.date <= payrun.periodEnd,
@@ -658,7 +667,11 @@ export function attendanceHealth(s: AppState, f: ReportFilters) {
     { id: 'late', label: 'Late', value: count((a) => a.status === 'LATE') },
     { id: 'ot', label: 'Overtime', value: count((a) => a.status === 'OVERTIME') },
     { id: 'absent', label: 'Absent', value: count((a) => a.status === 'ABSENT') },
-    { id: 'missing', label: 'Missing checkout', value: count((a) => a.status === 'MISSING_CHECKOUT') },
+    {
+      id: 'missing',
+      label: 'Missing checkout',
+      value: count((a) => a.status === 'MISSING_CHECKOUT'),
+    },
   ];
 }
 
@@ -731,7 +744,9 @@ export function payrollVariance(s: AppState, f: ReportFilters) {
         current: toMoneyString(now),
         previous: toMoneyString(before),
         delta: toMoneyString(subtractMoney(now, before)),
-        pct: before.isZero() ? 0 : subtractMoney(now, before).div(before).times(100).toDecimalPlaces(1).toNumber(),
+        pct: before.isZero()
+          ? 0
+          : subtractMoney(now, before).div(before).times(100).toDecimalPlaces(1).toNumber(),
       };
     })
     .filter((r) => r.current !== '0.00' || r.previous !== '0.00');

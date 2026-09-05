@@ -20,8 +20,12 @@ describe('role-scoped bootstrap', () => {
     const agent = await signedInAgent('maitri.shah@peoplepay360.com');
     const response = await agent.get('/api/bootstrap').expect(200);
 
-    expect(response.body.data.employees).toHaveLength(42);
-    expect(response.body.data.contracts).toHaveLength(43);
+    const { employees, contracts, counts } = response.body.data;
+    expect(employees.length).toBeGreaterThanOrEqual(42);
+    // The payload's own headcount must agree with the database's count.
+    expect(employees).toHaveLength(counts.employees);
+    expect(contracts.length).toBeGreaterThanOrEqual(employees.length);
+    expect(counts.total).toBeGreaterThanOrEqual(5000);
     expect(response.body.data.contracts[0].wage).toMatch(/^\d+\.\d{2}$/);
     expect(response.body.data.salaryRules).toHaveLength(6);
     expect(response.body.data.payruns).toHaveLength(4);
@@ -57,7 +61,7 @@ describe('role-scoped bootstrap', () => {
     const agent = await signedInAgent('priya.desai@peoplepay360.com');
     const response = await agent.get('/api/bootstrap').expect(200);
 
-    expect(response.body.data.employees).toHaveLength(42);
+    expect(response.body.data.employees.length).toBeGreaterThanOrEqual(42);
     expect(response.body.data.salaryStructures).toEqual([]);
     expect(response.body.data.salaryRules).toEqual([]);
     expect(response.body.data.payruns).toEqual([]);

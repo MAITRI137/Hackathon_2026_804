@@ -170,7 +170,10 @@ export function CommandLauncher({
     /* Payruns */
     if (can(role, 'payrun.read')) {
       for (const p of state.payruns) {
-        const blockers = p.id === state.activePayrunId ? exceptionsFor(state, p).filter((x) => x.blocking).length : 0;
+        const blockers =
+          p.id === state.activePayrunId
+            ? exceptionsFor(state, p).filter((x) => x.blocking).length
+            : 0;
         out.push({
           id: `pr-${p.id}`,
           kind: 'Payrun',
@@ -209,9 +212,7 @@ export function CommandLauncher({
     const q = query.trim();
     const matched = results.filter((r) => fuzzy(`${r.title} ${r.subtitle} ${r.kind}`, q));
     const order = ['Action', 'Module', 'Employee', 'Payrun', 'Payslip', 'Contract'];
-    return matched
-      .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
-      .slice(0, 40);
+    return matched.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)).slice(0, 40);
   }, [results, query]);
 
   useEffect(() => {

@@ -21,7 +21,9 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: 95;
+  /* Below the modal scrim: a dialog must dim the navigation too. The mobile
+     drawer raises itself above its own scrim in the phone layout below. */
+  z-index: 30;
 }
 .app-brand {
   display: flex;
@@ -667,6 +669,8 @@
     transition: transform var(--t-slow) var(--ease);
     box-shadow: var(--sh-xl);
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    /* As a drawer it must clear its own scrim (95) but stay under dialogs. */
+    z-index: 100;
   }
   .app-sidebar[data-open='true'] {
     transform: translateX(0);

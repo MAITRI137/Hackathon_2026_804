@@ -977,13 +977,19 @@
   font-weight: 550;
 }
 .bar-track {
-  height: 6px;
+  /* Both of these are spans. Width does not apply to a non-replaced inline
+     element, so without an explicit display the fill renders 0px wide and
+     every progress bar reads as empty. */
+  display: block;
+  height: 8px;
   background: var(--surface-3);
   border-radius: var(--r-full);
   overflow: hidden;
 }
 .bar-fill {
+  display: block;
   height: 100%;
+  min-width: 3px;
   border-radius: var(--r-full);
   transition: width 0.6s var(--ease);
 }
@@ -1192,11 +1198,20 @@
 }
 
 /* ─── Overlays: modal, drawer, sidecar, sheet ────────────── */
+/* ── Stacking order ───────────────────────────────────────────
+   30  sidebar (desktop)        95  navigation scrim
+   40  topbar                  100  sidebar as a mobile drawer / sidecar
+   20  sticky page header      110  dialog scrim
+   15  sticky action bar       120  modal and drawer
+   70  batch bar               130  notification panel
+   200 command launcher        300  toasts
+   Anything that dims the app must sit above everything it dims.
+   ───────────────────────────────────────────────────────────── */
 .scrim {
   position: fixed;
   inset: 0;
   background: var(--overlay);
-  z-index: 90;
+  z-index: 110;
   animation: fade var(--t-med) var(--ease);
 }
 @keyframes fade {
@@ -1208,7 +1223,7 @@
 .modal-layer {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 120;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1261,7 +1276,7 @@
 .drawer-layer {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 120;
   display: flex;
   justify-content: flex-end;
   pointer-events: none;
@@ -2024,4 +2039,9 @@ button.prov-node {
   height: 9px;
   border-radius: 50%;
   display: block;
+}
+
+/* The navigation drawer's scrim sits below the drawer but above the workspace. */
+.scrim-nav {
+  z-index: 95;
 }

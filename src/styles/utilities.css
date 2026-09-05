@@ -9,9 +9,17 @@
 .mobile-only {
   display: none;
 }
+/* Inline variant for controls that only exist on the phone layout: the nav
+   drawer's close button and the top-bar menu trigger. */
+.mobile-only-inline {
+  display: none !important;
+}
 @media (max-width: 767px) {
   .mobile-only {
     display: grid;
+  }
+  .mobile-only-inline {
+    display: inline-flex !important;
   }
   .desktop-only {
     display: none;

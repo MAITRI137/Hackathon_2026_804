@@ -31,7 +31,7 @@ import { hydrateFromServer } from '@/store/store';
 import { Avatar, Button } from '@/ui/primitives';
 import { SidecarHost, useLayer } from '@/ui/overlays';
 import { useToast } from '@/ui/toast';
-import { labelFor, navFor } from './nav';
+import { isExactMatch, labelFor, navFor } from './nav';
 import { CommandLauncher } from './CommandLauncher';
 import { useAppActions } from './actions-context';
 
@@ -117,7 +117,7 @@ export function Shell() {
 
   return (
     <div className="app">
-      {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} aria-hidden />}
+      {navOpen && <div className="scrim scrim-nav" onClick={() => setNavOpen(false)} aria-hidden />}
 
       <aside
         className="app-sidebar"
@@ -153,7 +153,7 @@ export function Shell() {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === '/'}
+                    end={isExactMatch(item, groups)}
                     className={({ isActive }) => clsx('nav-item', isActive && 'active')}
                     title={labelFor(item, role)}
                   >

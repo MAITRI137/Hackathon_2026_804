@@ -95,9 +95,16 @@ export function OpsPage() {
   const online = Boolean(metrics && !error);
   const databaseOnline = metrics?.database.online ?? false;
 
+  // Read volume is reported as a rate, not a lifetime counter: an operator
+  // needs to know what the database is doing now, not since the last restart.
+  const readsPerSecond = metrics
+    ? metrics.reads.series.slice(-5).reduce((a, b) => a + b, 0) / 5
+    : 0;
+  const readsLastMinute = metrics ? metrics.reads.series.reduce((a, b) => a + b, 0) : 0;
+
   const signal: GraphSignal = {
     requestsPerSecond: metrics?.requests.perSecond ?? 0,
-    readsPerSecond: metrics ? metrics.reads.series.slice(-10).reduce((a, b) => a + b, 0) / 10 : 0,
+    readsPerSecond,
     databaseMs: metrics?.database.roundTripMs ?? 0,
     latencyMs: metrics?.latency.p95 ?? 0,
     online,
@@ -168,10 +175,10 @@ export function OpsPage() {
         />
         <Metric
           icon={Layers}
-          label="Records read"
-          value={(metrics?.reads.total ?? 0).toLocaleString('en-IN')}
+          label="Rows read"
+          value={`${readsPerSecond < 10 ? readsPerSecond.toFixed(1) : Math.round(readsPerSecond)}/s`}
           tone="success"
-          sub={`${recordsLoaded.toLocaleString('en-IN')} resident in this browser (${coverage}% of the dataset)`}
+          sub={`${readsLastMinute.toLocaleString('en-IN')} in the last minute · ${recordsLoaded.toLocaleString('en-IN')} resident here (${coverage}% of the dataset)`}
         />
       </div>
 

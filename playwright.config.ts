@@ -18,7 +18,7 @@ export default defineConfig({
     {
       command: 'npm run dev:server',
       port: 3100,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'test',
@@ -30,7 +30,7 @@ export default defineConfig({
     {
       command: 'npm run dev -- --port 5174',
       port: 5174,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       env: { VITE_API_TARGET: 'http://localhost:3100' },
     },
   ],

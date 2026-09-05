@@ -29,8 +29,12 @@ test('signs in, loads persisted payroll, and switches persona securely', async (
   await signIn(page);
 
   await expect(page.getByRole('heading', { name: 'Payroll operations' })).toBeVisible();
-  // The run covers the whole organisation, not a sample of it.
-  await expect(page.getByText(/\d+ payslips/)).toBeVisible();
+  // The run covers the whole organisation, not a sample of it: the payslip
+  // count on the payrun chip must equal the seeded headcount.
+  const payslipChip = page.locator('.chip', { hasText: /^\d+ payslips$/ }).first();
+  await expect(payslipChip).toBeVisible();
+  const computed = Number((await payslipChip.innerText()).replace(/\D/g, ''));
+  expect(computed).toBeGreaterThanOrEqual(42);
 
   await page.getByRole('button', { name: /Maitri Shah/i }).click();
   await page.getByRole('option', { name: 'Employee', exact: true }).click();

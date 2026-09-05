@@ -124,7 +124,7 @@ export function Shell() {
         data-open={navOpen || undefined}
         aria-label="Primary navigation"
       >
-        <div className="brand">
+        <div className="app-brand">
           <span className="brand-mark" aria-hidden>
             P
           </span>

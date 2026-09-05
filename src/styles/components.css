@@ -995,6 +995,11 @@
 
 /* ─── Stepper ────────────────────────────────────────────── */
 .stepper {
+  /* An <ol> for semantics; the numbering is carried by the visual order, so the
+     default markers must not print into the layout. */
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -1450,6 +1455,8 @@
   background: var(--border);
 }
 .tl-dot {
+  display: block;
+  padding: 0;
   grid-column: 1;
   grid-row: 1 / span 3;
   width: 16px;
@@ -1470,19 +1477,21 @@
   grid-column: 2;
   min-width: 0;
 }
-.tl-dot.brand {
+/* Tones are attributes, not classes: a modifier called `brand` or `success`
+   would collide with any global utility of the same name. */
+.tl-dot[data-tone='brand'] {
   border-color: var(--brand);
   background: var(--brand-light);
 }
-.tl-dot.success {
+.tl-dot[data-tone='success'] {
   border-color: var(--success);
   background: var(--success-bg);
 }
-.tl-dot.warning {
+.tl-dot[data-tone='warning'] {
   border-color: var(--warning);
   background: var(--warning-bg);
 }
-.tl-dot.danger {
+.tl-dot[data-tone='danger'] {
   border-color: var(--danger);
   background: var(--danger-bg);
 }
@@ -1973,7 +1982,7 @@ button.prov-node {
 /* ─── Operations console ─────────────────────────────────── */
 .node-graph {
   position: relative;
-  height: 340px;
+  height: 292px;
   padding: var(--s3);
   background:
     radial-gradient(circle at 18% 20%, rgba(109, 162, 194, 0.1), transparent 42%),
@@ -1990,7 +1999,7 @@ button.prov-node {
    rather than squashing the request path into unreadable stubs. */
 @media (max-width: 900px) {
   .node-graph {
-    height: 300px;
+    height: 268px;
     overflow-x: auto;
   }
   .node-graph canvas {

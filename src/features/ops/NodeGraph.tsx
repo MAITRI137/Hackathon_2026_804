@@ -56,6 +56,9 @@ const EDGES: [string, string][] = [
 ];
 
 const MAX_PACKETS = 140;
+/** Width reserved on the right for the table panel. */
+const STORAGE_W = 196;
+const STORAGE_GAP = 20;
 
 function cssVar(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -94,9 +97,9 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
         id: 'clients',
         label: 'Browser clients',
         detail: () => `${live.current.recordsLoaded.toLocaleString('en-IN')} records loaded`,
-        x: 0.08,
+        x: 0.095,
         y: 0.5,
-        w: 132,
+        w: 128,
         h: 60,
         accent: false,
         flash: 0,
@@ -106,9 +109,9 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
         label: 'Express API',
         detail: () =>
           `${live.current.requestsPerSecond.toFixed(1)} req/s · p95 ${Math.round(live.current.latencyMs)} ms`,
-        x: 0.31,
+        x: 0.29,
         y: 0.5,
-        w: 140,
+        w: 136,
         h: 60,
         accent: true,
         flash: 0,
@@ -117,9 +120,9 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
         id: 'engine',
         label: 'Payroll engine',
         detail: () => 'decimal · sequence-ordered rules',
-        x: 0.54,
+        x: 0.5,
         y: 0.5,
-        w: 148,
+        w: 144,
         h: 60,
         accent: false,
         flash: 0,
@@ -128,9 +131,9 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
         id: 'prisma',
         label: 'Prisma',
         detail: () => `${live.current.readsPerSecond.toFixed(0)} rows/s`,
-        x: 0.75,
+        x: 0.7,
         y: 0.5,
-        w: 116,
+        w: 112,
         h: 60,
         accent: false,
         flash: 0,
@@ -140,9 +143,9 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
         label: 'PostgreSQL',
         detail: () =>
           `${live.current.totalRecords.toLocaleString('en-IN')} records · ${live.current.databaseMs.toFixed(0)} ms`,
-        x: 0.93,
+        x: 0.885,
         y: 0.5,
-        w: 132,
+        w: 124,
         h: 60,
         accent: true,
         flash: 0,
@@ -171,9 +174,12 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
     observer.observe(canvas);
     resize();
 
+    /** Drawing area excludes the reserved storage column. */
+    const flowWidth = () => Math.max(320, width - STORAGE_W - STORAGE_GAP);
+
     const nodeAt = (id: string) => {
       const n = nodes[id];
-      return { cx: n.x * width, cy: n.y * height, node: n };
+      return { cx: n.x * flowWidth(), cy: n.y * height, node: n };
     };
 
     const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
@@ -196,28 +202,41 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
       });
     };
 
+    /** The storage layer, drawn in its own column so it can never overflow. */
     const drawStorage = () => {
-      const { cx, cy } = nodeAt('db');
       const tables = live.current.tables.slice(0, 8);
       if (tables.length === 0) return;
+      const x0 = width - STORAGE_W;
       const max = Math.max(...tables.map((t) => t.rows), 1);
-      const startY = cy - (tables.length - 1) * 15 - 66;
+      const rowH = 22;
+      const blockH = tables.length * rowH + 18;
+      let y = Math.max(14, height / 2 - blockH / 2);
 
-      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
       ctx.textAlign = 'left';
-      for (let i = 0; i < tables.length; i += 1) {
-        const t = tables[i];
-        const y = startY + i * 15 + 130;
-        const barW = Math.max(3, (t.rows / max) * 74);
-        ctx.fillStyle = theme.brandLight;
-        roundRect(cx - 62, y, 76, 9, 4);
-        ctx.fill();
-        ctx.fillStyle = i < 3 ? theme.brand : theme.accent;
-        roundRect(cx - 62, y, barW, 9, 4);
-        ctx.fill();
+      ctx.fillStyle = theme.muted;
+      ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText('TABLES BY ROW COUNT', x0, y);
+      y += 16;
+
+      for (const t of tables) {
+        const barW = Math.max(2, (t.rows / max) * STORAGE_W);
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = theme.ink;
+        ctx.textAlign = 'left';
+        ctx.fillText(truncate(ctx, t.table, STORAGE_W - 58), x0, y + 8);
         ctx.fillStyle = theme.muted;
-        ctx.fillText(`${t.table} ${t.rows.toLocaleString('en-IN')}`, cx + 20, y + 8);
+        ctx.textAlign = 'right';
+        ctx.fillText(t.rows.toLocaleString('en-IN'), x0 + STORAGE_W, y + 8);
+
+        ctx.fillStyle = theme.brandLight;
+        roundRect(x0, y + 12, STORAGE_W, 4, 2);
+        ctx.fill();
+        ctx.fillStyle = theme.brand;
+        roundRect(x0, y + 12, barW, 4, 2);
+        ctx.fill();
+        y += rowH;
       }
+      ctx.textAlign = 'left';
     };
 
     const draw = (now: number) => {
@@ -381,6 +400,13 @@ export function NodeGraph({ signal }: { signal: GraphSignal }) {
       <canvas ref={canvasRef} role="img" aria-label={description} />
     </div>
   );
+}
+
+function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let out = text;
+  while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
+  return `${out}…`;
 }
 
 function wrapText(

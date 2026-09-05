@@ -252,7 +252,7 @@ export function Timeline({
     <div className="timeline">
       {items.map((it) => (
         <div className="tl-item" key={it.id}>
-          <span className={clsx('tl-dot', it.tone)} aria-hidden />
+          <span className="tl-dot" data-tone={it.tone ?? 'default'} aria-hidden />
           <div className="tl-body">
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{it.caption}</div>
             <div style={{ fontWeight: 600 }}>{it.title}</div>

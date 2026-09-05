@@ -10,6 +10,10 @@
 }
 
 /* ─── Sidebar ────────────────────────────────────────────── */
+/* Block names here are prefixed. A bare, generic class name like `.brand` is a
+   trap in a shared stylesheet: it silently matched tone modifiers such as
+   `.metric-v.brand` and `.tl-dot.brand`, giving them this block's padding,
+   border and 56px min-height. */
 .app-sidebar {
   width: var(--sidebar-w);
   flex: none;
@@ -19,7 +23,7 @@
   flex-direction: column;
   z-index: 95;
 }
-.brand {
+.app-brand {
   display: flex;
   align-items: center;
   gap: var(--s2);
@@ -618,7 +622,7 @@
     font-size: 9px;
     padding: 0 4px;
   }
-  .brand {
+  .app-brand {
     justify-content: center;
     padding: var(--s3) var(--s2);
   }
@@ -673,7 +677,7 @@
   .app-sidebar .role-switch .info {
     display: block;
   }
-  .app-sidebar .brand {
+  .app-sidebar .app-brand {
     justify-content: flex-start;
     padding: var(--s4);
   }

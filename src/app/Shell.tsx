@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  Bell,
-  CalendarDays,
-  Check,
-  ChevronsUpDown,
-  Menu,
-  Search,
-  Settings,
-  X,
-} from 'lucide-react';
+import { Bell, CalendarDays, Check, ChevronsUpDown, Menu, Search, Settings, X } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLES, ROLE_LABEL, type Role } from '@shared/types';
 import { monthLabel, relativeTime } from '@shared/dates';
@@ -24,6 +15,9 @@ import {
   unreadNotificationCount,
 } from '@/store/selectors';
 import { markNotificationsRead, switchRole } from '@/store/actions';
+import { connectDemoRole } from '@/lib/api';
+import { bootstrapPayroll } from '@/store/actions';
+import { hydrateFromServer } from '@/store/store';
 import { Avatar, Button } from '@/ui/primitives';
 import { SidecarHost, useLayer } from '@/ui/overlays';
 import { useToast } from '@/ui/toast';
@@ -44,6 +38,7 @@ export function Shell() {
   const [roleMenu, setRoleMenu] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [launcher, setLauncher] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
 
   const payrun = activePayrun(state);
   const groups = useMemo(() => navFor(role), [role]);
@@ -81,20 +76,44 @@ export function Shell() {
   }, [location.pathname]);
 
   const onRoleChange = useCallback(
-    (next: Role) => {
-      switchRole(next);
-      setRoleMenu(false);
-      navigate('/');
-      toast.show(`Now signed in as ${ROLE_LABEL[next]}`, 'info');
+    async (next: Role) => {
+      if (switchingRole || next === role) return;
+      setSwitchingRole(true);
+      try {
+        const payload = await connectDemoRole(next);
+        hydrateFromServer(payload);
+        if (next === 'HR_PAYROLL_USER' || next === 'HR_PAYROLL_MANAGER' || next === 'ADMIN') {
+          bootstrapPayroll();
+        }
+        setRoleMenu(false);
+        navigate('/');
+        toast.show(`Now securely signed in as ${ROLE_LABEL[next]}`, 'success');
+      } catch (error) {
+        switchRole(next);
+        setRoleMenu(false);
+        navigate('/');
+        toast.show(
+          error instanceof Error
+            ? `${error.message} Using the offline demo persona.`
+            : 'Using the offline demo persona.',
+          'warning',
+        );
+      } finally {
+        setSwitchingRole(false);
+      }
     },
-    [navigate, toast],
+    [navigate, role, switchingRole, toast],
   );
 
   return (
     <div className="app">
       {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} aria-hidden />}
 
-      <aside className="app-sidebar" data-open={navOpen || undefined} aria-label="Primary navigation">
+      <aside
+        className="app-sidebar"
+        data-open={navOpen || undefined}
+        aria-label="Primary navigation"
+      >
         <div className="brand">
           <span className="brand-mark" aria-hidden>
             P
@@ -171,6 +190,7 @@ export function Shell() {
                     role="option"
                     aria-selected={r === role}
                     className="role-opt"
+                    disabled={switchingRole}
                     onClick={() => onRoleChange(r)}
                   >
                     <span className="rdot" aria-hidden />

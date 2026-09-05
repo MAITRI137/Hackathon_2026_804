@@ -1,9 +1,14 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
+import { prisma } from '../db/prisma.js';
 
 const validOrigin = 'http://localhost:5173';
+
+beforeEach(async () => {
+  await prisma.user.updateMany({ data: { failedAttempts: 0, lockedUntil: null } });
+});
 
 describe('session authentication', () => {
   it('authenticates, exposes the role permission set, and destroys the session', async () => {

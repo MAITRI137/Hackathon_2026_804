@@ -5,6 +5,7 @@
  * selected slice changes — no global re-render on every mutation.
  */
 import { useSyncExternalStore } from 'react';
+import type { BootstrapPayload } from '@/lib/api';
 import { createInitialState, type AppState } from './state';
 
 type Listener = () => void;
@@ -27,6 +28,57 @@ export function setState(mutator: (draft: AppState) => void): void {
 export function resetState(): void {
   state = createInitialState();
   for (const l of listeners) l();
+}
+
+/** Replace local demo records with the server-authorized snapshot in one render. */
+export function hydrateFromServer(payload: BootstrapPayload): void {
+  setState((draft) => {
+    const user = payload.session.user;
+    const priorPayrun = draft.payruns.find((item) => item.id === draft.activePayrunId);
+    const recordKeys = [
+      'departments',
+      'jobPositions',
+      'schedules',
+      'holidays',
+      'leaveTypes',
+      'employees',
+      'contracts',
+      'attendance',
+      'leaveAllocations',
+      'leaveRequests',
+      'payslips',
+      'documents',
+      'audit',
+    ] as const;
+
+    for (const key of recordKeys) {
+      const value = payload[key];
+      if (value) draft[key] = value as never;
+    }
+
+    draft.users = [user];
+    draft.currentUserId = user.id;
+
+    if (payload.payruns?.length) {
+      draft.payruns = payload.payruns;
+      draft.activePayrunId = payload.payruns.at(-1)!.id;
+    } else if (priorPayrun) {
+      draft.payruns = [
+        {
+          ...priorPayrun,
+          status: 'DRAFT',
+          isFrozen: false,
+          frozenAt: null,
+          computedAt: null,
+          validatedAt: null,
+          paidAt: null,
+          inputSnapshotHash: null,
+          employeeIds: user.employeeId ? [user.employeeId] : [],
+        },
+      ];
+      draft.activePayrunId = priorPayrun.id;
+    }
+  });
 }
 
 function subscribe(listener: Listener): () => void {

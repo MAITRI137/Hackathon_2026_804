@@ -3,6 +3,8 @@ import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { OverlayProvider, SidecarProvider } from '@/ui/overlays';
 import { ToastProvider, useToast } from '@/ui/toast';
 import { bootstrapPayroll, computeActivePayrun } from '@/store/actions';
+import { connectDemoRole } from '@/lib/api';
+import { hydrateFromServer } from '@/store/store';
 import { AppActionsProvider, useAppActions } from './actions-context';
 import { Shell } from './Shell';
 import { RequirePermission } from './Page';
@@ -175,11 +177,25 @@ const router = createHashRouter([
 export function App() {
   const [ready, setReady] = useState(false);
 
-  // Compute the seeded periods once, so the app opens on real payroll data
-  // rather than an empty shell.
   useEffect(() => {
-    bootstrapPayroll();
-    setReady(true);
+    let active = true;
+    void connectDemoRole('HR_PAYROLL_MANAGER')
+      .then((payload) => {
+        if (!active) return;
+        hydrateFromServer(payload);
+        bootstrapPayroll();
+      })
+      .catch(() => {
+        if (!active) return;
+        // Offline judging remains usable from the deterministic local story.
+        bootstrapPayroll();
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (!ready) {

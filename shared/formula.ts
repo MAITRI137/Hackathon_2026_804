@@ -17,6 +17,9 @@ import { create, all, type MathNode } from 'mathjs';
 import { Decimal, money } from './money.js';
 
 const math = create(all, { number: 'number' });
+// Keep the parser private before removing it from the formula runtime. Salary
+// formulas are parsed by this module, never by expressions themselves.
+const parseFormula = math.parse.bind(math);
 
 // Remove everything that could reach outside the expression.
 math.import(
@@ -48,11 +51,7 @@ export const ALLOWED_FUNCTIONS = new Set(['min', 'max', 'round', 'floor', 'ceil'
 export const MAX_FORMULA_LENGTH = 500;
 
 export type FormulaErrorCode =
-  | 'SYNTAX'
-  | 'UNKNOWN_SYMBOL'
-  | 'FORBIDDEN'
-  | 'TOO_LONG'
-  | 'NOT_FINITE';
+  'SYNTAX' | 'UNKNOWN_SYMBOL' | 'FORBIDDEN' | 'TOO_LONG' | 'NOT_FINITE';
 
 export class FormulaError extends Error {
   code: FormulaErrorCode;
@@ -87,7 +86,7 @@ function parseOnly(source: string): Parsed {
 
   let node: MathNode;
   try {
-    node = math.parse(src);
+    node = parseFormula(src);
   } catch (err) {
     throw new FormulaError('SYNTAX', (err as Error).message);
   }

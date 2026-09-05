@@ -19,6 +19,7 @@ data/outbox/
 # Sensitive and generated files
 .codex/
 .gemini/
+.superdesign/
 skills/
 docs/*
 !docs/IMPLEMENTATION_PLAN.md

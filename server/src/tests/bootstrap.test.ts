@@ -42,8 +42,11 @@ describe('role-scoped bootstrap', () => {
     expect(response.body.data.employees).toHaveLength(1);
     // Entitled to the rules that compute their own pay...
     expect(response.body.data.salaryRules.length).toBeGreaterThan(0);
-    // ...but never to anyone else's payroll.
-    expect(response.body.data.payruns).toHaveLength(0);
+    // ...and only to their own membership inside each visible pay period.
+    expect(response.body.data.payruns.length).toBeGreaterThan(0);
+    for (const payrun of response.body.data.payruns) {
+      expect(payrun.employeeIds).toEqual(['EMP-001']);
+    }
     for (const slip of response.body.data.payslips) {
       expect(slip.employeeId).toBe('EMP-001');
     }
@@ -66,8 +69,7 @@ describe('role-scoped bootstrap', () => {
     // payslip explanation — and exactly one structure: their own.
     expect(response.body.data.salaryStructures).toHaveLength(1);
     expect(response.body.data.salaryRules.length).toBeGreaterThan(0);
-    // But no payrun administration and no audit trail.
-    expect(response.body.data.payruns).toEqual([]);
+    // But no organisation-wide payrun membership and no audit trail.
     expect(response.body.data.audit).toEqual([]);
   });
 
@@ -81,7 +83,10 @@ describe('role-scoped bootstrap', () => {
     // …but administer no payroll and see no one else's pay. Rule definitions
     // for their own structure are not confidential — they are printed on their
     // own payslip — so the boundary that matters is amounts, not policy.
-    expect(response.body.data.payruns).toEqual([]);
+    expect(response.body.data.payruns.length).toBeGreaterThan(0);
+    for (const payrun of response.body.data.payruns) {
+      expect(payrun.employeeIds).toEqual(['EMP-007']);
+    }
     expect(response.body.data.salaryStructures.length).toBeLessThanOrEqual(1);
     for (const slip of response.body.data.payslips) {
       expect(slip.employeeId).toBe('EMP-007');

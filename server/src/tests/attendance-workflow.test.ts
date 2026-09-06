@@ -7,6 +7,27 @@ import { prisma } from '../db/prisma.js';
 const origin = 'http://localhost:5173';
 const demoPassword = 'PeoplePay360!2026';
 
+/**
+ * The day the server will punch into, in the organisation timezone.
+ *
+ * The endpoint deliberately uses server time rather than a value the client
+ * sends, so the test has to derive the same day the same way instead of
+ * assuming the machine running the suite is in the same zone.
+ */
+function serverTodayIso() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+const serverToday = () => new Date(`${serverTodayIso()}T00:00:00.000Z`);
+
 async function signedInAgent(email: string) {
   const agent = request.agent(createApp());
   await agent
@@ -23,12 +44,13 @@ describe('attendance workflow', () => {
 
   beforeEach(async () => {
     originalRecord = await prisma.attendance.findUniqueOrThrow({ where: { id: 'att-EMP-001-2026-09-05' } });
+    await prisma.attendance.deleteMany({ where: { employeeId: 'EMP-001', date: serverToday() } });
+    createdAttendanceId = null;
   });
 
   afterEach(async () => {
-    await prisma.attendance.deleteMany({
-      where: { OR: [{ id: { startsWith: 'test-attendance-' } }, ...(createdAttendanceId ? [{ id: createdAttendanceId }] : [])] },
-    });
+    await prisma.attendance.deleteMany({ where: { employeeId: 'EMP-001', date: serverToday() } });
+    await prisma.attendance.deleteMany({ where: { id: { startsWith: 'test-attendance-' } } });
     await prisma.auditEvent.deleteMany({ where: { action: { in: ['ATTENDANCE_CHECKED_IN', 'ATTENDANCE_CHECKED_OUT', 'ATTENDANCE_CORRECTED', 'ATTENDANCE_REGULARIZED'] } } });
     await prisma.attendance.update({
       where: { id: originalRecord.id },
@@ -48,15 +70,7 @@ describe('attendance workflow', () => {
 
   it('persists an employee check-in with a server date and audit event', async () => {
     const agent = await signedInAgent('aarav.patel@peoplepay360.com');
-    const currentDate = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(new Date())
-      .reduce<Record<string, string>>((parts, part) => ({ ...parts, [part.type]: part.value }), {});
-    const date = `${currentDate.year}-${currentDate.month}-${currentDate.day}`;
+    const date = serverTodayIso();
 
     const response = await agent.post('/api/attendance/check-in').set('Origin', origin).expect(201);
 
@@ -81,7 +95,12 @@ describe('attendance workflow', () => {
     const response = await manager
       .patch(`/api/attendance/${record.id}/correction`)
       .set('Origin', origin)
-      .send({ checkIn: '09:30', checkOut: '18:00', reason: 'Employee supplied the missing checkout time.', version: 1 })
+      .send({
+        checkIn: '09:30',
+        checkOut: '18:00',
+        reason: 'Employee supplied the missing checkout time.',
+        version: record.version,
+      })
       .expect(200);
 
     expect(response.body.data).toMatchObject({
@@ -96,15 +115,12 @@ describe('attendance workflow', () => {
 
   it('rejects a correction by an employee and duplicate open attendance', async () => {
     const employee = await signedInAgent('aarav.patel@peoplepay360.com');
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' })
-      .formatToParts(new Date())
-      .reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
-    const date = `${parts.year}-${parts.month}-${parts.day}`;
+    const record = await prisma.attendance.findUniqueOrThrow({ where: { id: 'att-EMP-001-2026-09-05' } });
     await prisma.attendance.create({
       data: {
         id: `test-attendance-${Date.now()}`,
         employeeId: 'EMP-001',
-        date: new Date(`${date}T00:00:00.000Z`),
+        date: serverToday(),
         checkIn: '09:00',
         checkOut: null,
         workedMinutes: 0,
@@ -116,7 +132,7 @@ describe('attendance workflow', () => {
     await employee
       .patch('/api/attendance/att-EMP-001-2026-09-05/correction')
       .set('Origin', origin)
-      .send({ checkIn: '09:30', checkOut: '18:00', reason: 'Not allowed.', version: 1 })
+      .send({ checkIn: '09:30', checkOut: '18:00', reason: 'Not allowed.', version: record.version })
       .expect(403);
 
     await employee.post('/api/attendance/check-in').set('Origin', origin).expect(409);

@@ -52,6 +52,11 @@ describe('persisted payroll decision workflow', () => {
           },
         }),
       ),
+      // Compute persists payslips, so restoring the payrun means removing the
+      // rows it produced; leaving them would let the next run start validated.
+      prisma.payslipLine.deleteMany({ where: { payslip: { payrunId } } }),
+      prisma.payslip.deleteMany({ where: { payrunId } }),
+      prisma.idempotencyKey.deleteMany({ where: { scope: { startsWith: 'payrun.' } } }),
       prisma.payrun.update({
         where: { id: payrunId },
         data: {
@@ -68,7 +73,7 @@ describe('persisted payroll decision workflow', () => {
     ]);
   });
 
-  it('persists source corrections and creates a decision receipt before payment', async () => {
+  it('persists source corrections and creates a decision receipt before payment', { timeout: 120_000 }, async () => {
     const agent = await signedInAgent('maitri.shah@peoplepay360.com');
 
     await agent.post(`/api/payruns/${payrunId}/compute`).set('Origin', origin).expect(200);

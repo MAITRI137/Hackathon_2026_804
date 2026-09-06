@@ -14,12 +14,16 @@ import { authRouter } from './routes/auth.js';
 import { attendanceRouter } from './routes/attendance.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
 import { contractRouter } from './routes/contracts.js';
+import { demoPaymentRouter } from './routes/demo-payments.js';
+import { documentRouter } from './routes/documents.js';
 import { employeeRouter } from './routes/employees.js';
 import { eventsRouter } from './routes/events.js';
 import { healthRouter } from './routes/health.js';
 import { leaveRouter } from './routes/leave.js';
 import { opsRouter } from './routes/ops.js';
+import { outboxRouter } from './routes/outbox.js';
 import { payrunRouter } from './routes/payruns.js';
+import { salaryRouter } from './routes/salary.js';
 
 const PostgresSessionStore = connectPgSimple(session);
 
@@ -64,7 +68,11 @@ export function createApp() {
   app.use('/api', employeeRouter);
   app.use('/api', contractRouter);
   app.use('/api', bootstrapRouter);
+  app.use('/api', salaryRouter);
   app.use('/api', payrunRouter);
+  app.use('/api', demoPaymentRouter);
+  app.use('/api', outboxRouter);
+  app.use('/api', documentRouter);
   app.use('/api', opsRouter);
   app.use(errorHandler);
 

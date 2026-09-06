@@ -87,69 +87,80 @@ enum PayslipStatus {
 }
 
 model User {
-  id                String     @id
-  email             String     @unique
+  id                String                   @id
+  email             String                   @unique
   passwordHash      String
   role              Role
-  employeeId        String?    @unique
+  employeeId        String?                  @unique
   displayName       String
   initials          String
-  isActive          Boolean    @default(true)
-  lastLoginAt       DateTime?  @db.Timestamptz(3)
-  failedAttempts    Int        @default(0)
-  lockedUntil       DateTime?  @db.Timestamptz(3)
-  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
-  employee          Employee?  @relation(fields: [employeeId], references: [id])
+  isActive          Boolean                  @default(true)
+  lastLoginAt       DateTime?                @db.Timestamptz(3)
+  failedAttempts    Int                      @default(0)
+  lockedUntil       DateTime?                @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
+  employee          Employee?                @relation(fields: [employeeId], references: [id])
   createdPayruns    Payrun[]
   uploadedDocuments Document[]
+  memberships       OrganisationMembership[]
+  notifications     Notification[]
+  savedViews        SavedView[]
 }
 
 model Department {
-  id            String        @id
-  name          String        @unique
-  code          String        @unique
-  parentId      String?
-  managerId     String?
-  monthlyBudget Decimal       @db.Decimal(18, 2)
-  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
-  parent        Department?   @relation("DepartmentTree", fields: [parentId], references: [id])
-  children      Department[]  @relation("DepartmentTree")
-  manager       Employee?     @relation("DepartmentManager", fields: [managerId], references: [id])
-  employees     Employee[]    @relation("EmployeeDepartment")
-  positions     JobPosition[]
-  contracts     Contract[]
+  id             String        @id
+  name           String        @unique
+  code           String        @unique
+  parentId       String?
+  managerId      String?
+  monthlyBudget  Decimal       @db.Decimal(18, 2)
+  organisationId String        @default("org-demo")
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+  parent         Department?   @relation("DepartmentTree", fields: [parentId], references: [id])
+  children       Department[]  @relation("DepartmentTree")
+  manager        Employee?     @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees      Employee[]    @relation("EmployeeDepartment")
+  positions      JobPosition[]
+  contracts      Contract[]
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
 
   @@index([parentId])
   @@index([managerId])
 }
 
 model JobPosition {
-  id           String      @id
-  title        String
-  departmentId String?
-  level        String
-  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
-  department   Department? @relation(fields: [departmentId], references: [id])
-  employees    Employee[]
-  contracts    Contract[]
+  id             String      @id
+  title          String
+  departmentId   String?
+  level          String
+  organisationId String      @default("org-demo")
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @db.Timestamptz(3)
+  department     Department? @relation(fields: [departmentId], references: [id])
+  employees      Employee[]
+  contracts      Contract[]
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
 
   @@index([departmentId])
 }
 
 model WorkingSchedule {
-  id           String         @id
-  name         String         @unique
-  timezone     String
-  hoursPerWeek Decimal        @db.Decimal(6, 2)
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
-  lines        ScheduleLine[]
-  employees    Employee[]
-  contracts    Contract[]
+  id             String         @id
+  name           String         @unique
+  timezone       String
+  hoursPerWeek   Decimal        @db.Decimal(6, 2)
+  isActive       Boolean        @default(true)
+  organisationId String         @default("org-demo")
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  lines          ScheduleLine[]
+  employees      Employee[]
+  contracts      Contract[]
+  organisation   Organisation   @relation(fields: [organisationId], references: [id])
 }
 
 model ScheduleLine {
@@ -194,6 +205,7 @@ model Employee {
   workingScheduleId  String
   panMasked          String?
   version            Int                 @default(1)
+  organisationId     String              @default("org-demo")
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
   department         Department          @relation("EmployeeDepartment", fields: [departmentId], references: [id])
@@ -211,6 +223,11 @@ model Employee {
   payruns            PayrunEmployee[]
   payslips           Payslip[]
   documents          Document[]
+
+  organisation   Organisation           @relation(fields: [organisationId], references: [id])
+  checklists     ChecklistInstance[]
+  profileChanges ProfileChangeRequest[]
+  salaryChanges  SalaryChangeRequest[]
 
   @@index([departmentId, status])
   @@index([managerId])
@@ -254,6 +271,8 @@ model Contract {
   payslips          Payslip[]
   documents         Document[]
 
+  salaryChanges SalaryChangeRequest[]
+
   @@index([employeeId, startDate, endDate])
   @@index([status, endDate])
 }
@@ -270,6 +289,7 @@ model Attendance {
   correctionReason String?
   correctedById    String?
   correctedAt      DateTime?        @db.Timestamptz(3)
+  version          Int              @default(1)
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
   employee         Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -337,18 +357,20 @@ model LeaveRequest {
 }
 
 model SalaryStructure {
-  id          String       @id
-  name        String
-  code        String       @unique
-  description String
-  isActive    Boolean      @default(true)
-  version     Int          @default(1)
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
-  rules       SalaryRule[]
-  contracts   Contract[]
-  payruns     Payrun[]
-  payslips    Payslip[]
+  id             String       @id
+  name           String
+  code           String       @unique
+  description    String
+  isActive       Boolean      @default(true)
+  version        Int          @default(1)
+  organisationId String       @default("org-demo")
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  rules          SalaryRule[]
+  contracts      Contract[]
+  payruns        Payrun[]
+  payslips       Payslip[]
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
 }
 
 model SalaryRule {
@@ -366,6 +388,8 @@ model SalaryRule {
   conditionFormula String?
   isActive         Boolean         @default(true)
   ruleVersion      Int             @default(1)
+  effectiveFrom    DateTime        @default(dbgenerated("'2020-01-01'::date")) @db.Date
+  supersededAt     DateTime?       @db.Timestamptz(3)
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
   structure        SalaryStructure @relation(fields: [structureId], references: [id])
@@ -375,29 +399,33 @@ model SalaryRule {
 }
 
 model Payrun {
-  id                String           @id
+  id                String                  @id
   name              String
-  periodStart       DateTime         @db.Date
-  periodEnd         DateTime         @db.Date
+  periodStart       DateTime                @db.Date
+  periodEnd         DateTime                @db.Date
   salaryStructureId String
   status            PayrunStatus
-  isFrozen          Boolean          @default(false)
-  frozenAt          DateTime?        @db.Timestamptz(3)
+  isFrozen          Boolean                 @default(false)
+  frozenAt          DateTime?               @db.Timestamptz(3)
   reopenReason      String?
   expectedWorkDays  Int
-  computedAt        DateTime?        @db.Timestamptz(3)
-  validatedAt       DateTime?        @db.Timestamptz(3)
-  paidAt            DateTime?        @db.Timestamptz(3)
+  computedAt        DateTime?               @db.Timestamptz(3)
+  validatedAt       DateTime?               @db.Timestamptz(3)
+  paidAt            DateTime?               @db.Timestamptz(3)
   inputSnapshotHash String?
   createdById       String
-  version           Int              @default(1)
-  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
-  salaryStructure   SalaryStructure  @relation(fields: [salaryStructureId], references: [id])
-  createdBy         User             @relation(fields: [createdById], references: [id])
+  version           Int                     @default(1)
+  organisationId    String                  @default("org-demo")
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @db.Timestamptz(3)
+  salaryStructure   SalaryStructure         @relation(fields: [salaryStructureId], references: [id])
+  createdBy         User                    @relation(fields: [createdById], references: [id])
   employees         PayrunEmployee[]
   payslips          Payslip[]
   decisionReceipt   PayrollDecisionReceipt?
+
+  organisation       Organisation       @relation(fields: [organisationId], references: [id])
+  demoPaymentBatches DemoPaymentBatch[]
 
   @@unique([periodStart, salaryStructureId])
   @@index([status, periodStart])
@@ -407,25 +435,25 @@ model Payrun {
 /// validation, then extended at payment; the source data remains in its own
 /// normalized tables and this record preserves what was approved at that time.
 model PayrollDecisionReceipt {
-  id                     String   @id @default(cuid())
-  payrunId               String   @unique
+  id                     String    @id @default(cuid())
+  payrunId               String    @unique
   snapshotHash           String
   readinessScore         Int
   blockingExceptionCount Int
   employeeCount          Int
-  netTotal               Decimal  @db.Decimal(18, 2)
+  netTotal               Decimal   @db.Decimal(18, 2)
   preparedById           String
   preparedByName         String
-  preparedAt             DateTime @db.Timestamptz(3)
+  preparedAt             DateTime  @db.Timestamptz(3)
   validatedById          String?
   validatedByName        String?
   validatedAt            DateTime? @db.Timestamptz(3)
   paidById               String?
   paidByName             String?
   paidAt                 DateTime? @db.Timestamptz(3)
-  createdAt              DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
-  payrun                 Payrun   @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+  payrun                 Payrun    @relation(fields: [payrunId], references: [id], onDelete: Cascade)
 }
 
 model PayrunEmployee {
@@ -473,6 +501,8 @@ model Payslip {
   structure       SalaryStructure @relation(fields: [structureId], references: [id])
   lines           PayslipLine[]
 
+  paymentItems DemoPaymentItem[]
+
   @@unique([payrunId, employeeId])
   @@index([employeeId, periodStart])
   @@index([payrunId, status])
@@ -512,6 +542,8 @@ model Document {
   contract       Contract? @relation(fields: [contractId], references: [id])
   uploadedBy     User      @relation(fields: [uploadedById], references: [id])
 
+  generation DocumentGeneration?
+
   @@index([employeeId, category])
 }
 
@@ -530,4 +562,351 @@ model AuditEvent {
 
   @@index([entityType, entityId, at])
   @@index([actorId, at])
+}
+
+/**
+ * ============================================================
+ * Tenancy
+ * ============================================================
+ */
+
+/// One customer of the product. The demo runs a single organisation, but every
+/// business record carries the scope, so a second tenant is a data change
+/// rather than a rewrite.
+model Organisation {
+  id                    String                   @id
+  name                  String
+  code                  String                   @unique
+  timezone              String                   @default("Asia/Kolkata")
+  currency              String                   @default("INR")
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships           OrganisationMembership[]
+  departments           Department[]
+  positions             JobPosition[]
+  schedules             WorkingSchedule[]
+  employees             Employee[]
+  structures            SalaryStructure[]
+  payruns               Payrun[]
+  settings              AppSetting[]
+  notifications         Notification[]
+  savedViews            SavedView[]
+  outbox                OutboxMessage[]
+  paymentBatches        DemoPaymentBatch[]
+  checklistTemplates    ChecklistTemplate[]
+  profileChangeRequests ProfileChangeRequest[]
+  salaryChangeRequests  SalaryChangeRequest[]
+  documentGenerations   DocumentGeneration[]
+}
+
+model OrganisationMembership {
+  id             String       @id @default(cuid())
+  organisationId String
+  userId         String
+  role           Role
+  isDefault      Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, userId])
+  @@index([userId])
+}
+
+/**
+ * ============================================================
+ * Platform records
+ * ============================================================
+ */
+
+/// Persisted configuration. A setting is a business record, not browser state:
+/// a policy an administrator changes has to survive a refresh and apply to
+/// every other signed-in session.
+model AppSetting {
+  organisationId String
+  key            String
+  value          Json
+  updatedById    String?
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@id([organisationId, key])
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Notification {
+  id             String               @id
+  organisationId String
+  userId         String?
+  role           Role?
+  kind           String
+  title          String
+  body           String
+  severity       NotificationSeverity @default(INFO)
+  entityType     String?
+  entityId       String?
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  readAt         DateTime?            @db.Timestamptz(3)
+  dismissedAt    DateTime?            @db.Timestamptz(3)
+  organisation   Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user           User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([role, createdAt])
+}
+
+model SavedView {
+  id             String       @id
+  organisationId String
+  ownerId        String
+  view           String
+  name           String
+  config         Json
+  isShared       Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, view, name])
+  @@index([organisationId, view])
+}
+
+/**
+ * ============================================================
+ * Onboarding and offboarding checklists
+ * ============================================================
+ */
+
+enum ChecklistKind {
+  ONBOARDING
+  OFFBOARDING
+}
+
+enum ChecklistItemStatus {
+  PENDING
+  DONE
+  SKIPPED
+}
+
+model ChecklistTemplate {
+  id             String              @id
+  organisationId String
+  name           String
+  kind           ChecklistKind
+  items          Json
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  organisation   Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  instances      ChecklistInstance[]
+
+  @@unique([organisationId, name])
+}
+
+model ChecklistInstance {
+  id          String            @id
+  templateId  String
+  employeeId  String
+  kind        ChecklistKind
+  startedAt   DateTime          @db.Timestamptz(3)
+  completedAt DateTime?         @db.Timestamptz(3)
+  version     Int               @default(1)
+  template    ChecklistTemplate @relation(fields: [templateId], references: [id])
+  employee    Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  items       ChecklistItem[]
+
+  @@index([employeeId, kind])
+}
+
+model ChecklistItem {
+  id            String              @id @default(cuid())
+  instanceId    String
+  label         String
+  ownerRole     Role
+  sequence      Int
+  dueDate       DateTime?           @db.Date
+  status        ChecklistItemStatus @default(PENDING)
+  completedAt   DateTime?           @db.Timestamptz(3)
+  completedById String?
+  instance      ChecklistInstance   @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, sequence])
+}
+
+/**
+ * ============================================================
+ * Change requests
+ * ============================================================
+ */
+
+model ProfileChangeRequest {
+  id             String         @id
+  organisationId String
+  employeeId     String
+  field          String
+  currentValue   String
+  proposedValue  String
+  reason         String
+  status         ApprovalStatus @default(PENDING)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?      @db.Timestamptz(3)
+  decisionNote   String?
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee       Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([employeeId])
+}
+
+model SalaryChangeRequest {
+  id             String         @id
+  organisationId String
+  employeeId     String
+  contractId     String
+  currentWage    Decimal        @db.Decimal(18, 2)
+  proposedWage   Decimal        @db.Decimal(18, 2)
+  effectiveFrom  DateTime       @db.Date
+  reason         String
+  status         ApprovalStatus @default(PENDING)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?      @db.Timestamptz(3)
+  decisionNote   String?
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee       Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  contract       Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([employeeId])
+}
+
+/**
+ * ============================================================
+ * Simulated external integrations
+ * These are deliberately fake at the boundary and completely real inside the
+ * product: the batch, the item, the status, the failure reason and the retry
+ * count are persisted rows, so what an operator sees after a refresh is what
+ * actually happened. Nothing here moves money or sends mail.
+ * ============================================================
+ */
+
+enum SimulatedDeliveryStatus {
+  QUEUED
+  SIMULATED_SENT
+  SIMULATED_FAILED
+}
+
+enum SimulatedPaymentStatus {
+  QUEUED
+  SIMULATED_SUCCESS
+  SIMULATED_FAILURE
+}
+
+model OutboxMessage {
+  id                  String                  @id
+  organisationId      String
+  channel             String                  @default("EMAIL")
+  recipientEmail      String
+  recipientEmployeeId String?
+  subject             String
+  template            String
+  payslipId           String?
+  payrunId            String?
+  status              SimulatedDeliveryStatus @default(QUEUED)
+  failureReason       String?
+  attempts            Int                     @default(0)
+  lastAttemptAt       DateTime?               @db.Timestamptz(3)
+  createdById         String
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @db.Timestamptz(3)
+  organisation        Organisation            @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([payrunId, recipientEmail, template])
+  @@index([status, createdAt])
+  @@index([recipientEmployeeId])
+}
+
+model DemoPaymentBatch {
+  id             String                 @id
+  organisationId String
+  payrunId       String
+  reference      String                 @unique
+  status         SimulatedPaymentStatus @default(QUEUED)
+  totalAmount    Decimal                @db.Decimal(18, 2)
+  itemCount      Int                    @default(0)
+  successCount   Int                    @default(0)
+  failureCount   Int                    @default(0)
+  createdById    String
+  createdByName  String
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
+  organisation   Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrun         Payrun                 @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  items          DemoPaymentItem[]
+
+  @@index([payrunId, createdAt])
+}
+
+model DemoPaymentItem {
+  id            String                 @id @default(cuid())
+  batchId       String
+  payslipId     String
+  employeeId    String
+  amount        Decimal                @db.Decimal(18, 2)
+  accountMasked String
+  status        SimulatedPaymentStatus @default(QUEUED)
+  failureReason String?
+  retryCount    Int                    @default(0)
+  updatedAt     DateTime               @updatedAt @db.Timestamptz(3)
+  batch         DemoPaymentBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  payslip       Payslip                @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, payslipId])
+  @@index([employeeId])
+}
+
+/// A generated PDF. The bytes live in the row, so a demo machine needs no
+/// object store and a download after a refresh returns the same file.
+model DocumentGeneration {
+  id             String       @id
+  organisationId String
+  documentId     String       @unique
+  kind           String
+  employeeId     String?
+  payslipId      String?
+  byteSize       Int
+  checksum       String
+  content        Bytes
+  generatedById  String
+  generatedAt    DateTime     @default(now()) @db.Timestamptz(3)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, kind])
+}
+
+/// Replay protection for commands that must not run twice: payroll compute,
+/// validate and pay, plus both simulated integrations.
+model IdempotencyKey {
+  scope       String
+  key         String
+  userId      String
+  requestHash String
+  response    Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([scope, key])
+  @@index([createdAt])
 }

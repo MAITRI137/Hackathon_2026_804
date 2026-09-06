@@ -1,4 +1,4 @@
-import type { Role } from '@shared/types';
+import type { Attendance, Role } from '@shared/types';
 
 import type { AppState } from '@/store/state';
 
@@ -161,6 +161,30 @@ export function resolvePayrunAttendance(
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export function attendanceCheckIn(): Promise<Attendance> {
+  return api<Attendance>('/attendance/check-in', { method: 'POST' });
+}
+
+export function attendanceCheckOut(): Promise<Attendance> {
+  return api<Attendance>('/attendance/check-out', { method: 'POST' });
+}
+
+export function correctAttendanceRecord(
+  attendanceId: string,
+  input: { checkIn: string | null; checkOut: string | null; reason: string; version: number },
+): Promise<Attendance> {
+  return api<Attendance>(`/attendance/${attendanceId}/correction`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function regularizeAttendance(
+  records: { id: string; checkOut: string; reason: string; version: number }[],
+): Promise<{ recordIds: string[] }> {
+  return api('/attendance/regularizations', { method: 'POST', body: JSON.stringify({ records }) });
 }
 
 export function runReadinessScan(): Promise<ReadinessScan> {

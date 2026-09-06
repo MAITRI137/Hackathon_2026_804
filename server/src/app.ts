@@ -11,8 +11,13 @@ import { requestId } from './middleware/request-id.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { authRouter } from './routes/auth.js';
+import { attendanceRouter } from './routes/attendance.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
+import { contractRouter } from './routes/contracts.js';
+import { employeeRouter } from './routes/employees.js';
+import { eventsRouter } from './routes/events.js';
 import { healthRouter } from './routes/health.js';
+import { leaveRouter } from './routes/leave.js';
 import { opsRouter } from './routes/ops.js';
 import { payrunRouter } from './routes/payruns.js';
 
@@ -53,6 +58,11 @@ export function createApp() {
   app.use(loadCurrentUser);
   app.use('/api', healthRouter);
   app.use('/api', authRouter);
+  app.use('/api', eventsRouter);
+  app.use('/api', attendanceRouter);
+  app.use('/api', leaveRouter);
+  app.use('/api', employeeRouter);
+  app.use('/api', contractRouter);
   app.use('/api', bootstrapRouter);
   app.use('/api', payrunRouter);
   app.use('/api', opsRouter);

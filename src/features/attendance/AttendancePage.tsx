@@ -18,9 +18,15 @@ import {
   monthStart,
 } from '@shared/dates';
 import type { Attendance } from '@shared/types';
-import { useStore } from '@/store/store';
+import { hydrateFromServer, useStore } from '@/store/store';
 import { currentEmployee, currentRole, empById } from '@/store/selectors';
-import { applyRegularizations, checkIn, checkOut, correctAttendance } from '@/store/actions';
+import {
+  attendanceCheckIn,
+  attendanceCheckOut,
+  correctAttendanceRecord,
+  refreshBootstrap,
+  regularizeAttendance,
+} from '@/lib/api';
 import { Page } from '@/app/Page';
 import { Avatar, Banner, Button, Card, Chip, EmptyState, Metric } from '@/ui/primitives';
 import { Checkbox, SearchBox, Select, TextArea, TextInput } from '@/ui/form';
@@ -56,6 +62,19 @@ export function AttendancePage() {
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
   const [selectedProposals, setSelectedProposals] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+
+  const runMutation = async (mutation: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    try {
+      await mutation();
+      hydrateFromServer(await refreshBootstrap());
+      toast.success(success);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Attendance update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const scoped = useMemo(
     () => (selfOnly ? state.attendance.filter((a) => a.employeeId === me?.id) : state.attendance),
@@ -184,11 +203,7 @@ export function AttendancePage() {
                 variant="danger"
                 icon={LogOut}
                 pending={busy}
-                onClick={() => {
-                  setBusy(true);
-                  toast.result(checkOut(me.id));
-                  setBusy(false);
-                }}
+                onClick={() => void runMutation(attendanceCheckOut, 'Checked out. Attendance is saved for your manager.')}
               >
                 Check out
               </Button>
@@ -198,11 +213,7 @@ export function AttendancePage() {
                 icon={LogIn}
                 pending={busy}
                 disabled={Boolean(todayRecord?.checkOut)}
-                onClick={() => {
-                  setBusy(true);
-                  toast.result(checkIn(me.id));
-                  setBusy(false);
-                }}
+                onClick={() => void runMutation(attendanceCheckIn, 'Checked in. Attendance is saved for your manager.')}
               >
                 Check in
               </Button>
@@ -395,11 +406,27 @@ export function AttendancePage() {
                 <Button
                   variant="primary"
                   disabled={selectedProposals.size === 0}
-                  onClick={() => {
-                    const r = applyRegularizations([...selectedProposals]);
-                    toast.result(r);
-                    setSelectedProposals(new Set());
-                  }}
+                  onClick={() =>
+                    void runMutation(
+                      () =>
+                        regularizeAttendance(
+                          proposals
+                            .filter((record) => selectedProposals.has(record.id))
+                            .map((record) => {
+                              const employee = empById(state, record.employeeId);
+                              const schedule = state.schedules.find((item) => item.id === employee?.workingScheduleId);
+                              const line = schedule?.lines.find((item) => item.dayOfWeek === dayOfWeek(record.date)) ?? schedule?.lines[0];
+                              return {
+                                id: record.id,
+                                checkOut: line?.end ?? '18:00',
+                                version: record.version,
+                                reason: 'Regularized from the employee working schedule.',
+                              };
+                            }),
+                        ),
+                      'Regularization saved and shared with affected users.',
+                    ).finally(() => setSelectedProposals(new Set()))
+                  }
                 >
                   Accept {selectedProposals.size || ''} proposal{selectedProposals.size === 1 ? '' : 's'}
                 </Button>
@@ -485,13 +512,25 @@ function CorrectDialog({ record, onClose }: { record: Attendance; onClose: () =>
           <Button
             variant="primary"
             onClick={() => {
-              const r = correctAttendance(record.id, { checkIn: checkInVal, checkOut: checkOutVal }, reason);
-              if (!r.ok) {
-                setError({ field: r.field, message: r.error });
+              if (reason.trim().length < 3) {
+                setError({ field: 'reason', message: 'Enter a correction reason.' });
                 return;
               }
-              toast.success(r.message);
-              onClose();
+              void correctAttendanceRecord(record.id, {
+                checkIn: checkInVal,
+                checkOut: checkOutVal,
+                reason,
+                version: record.version,
+              })
+                .then(refreshBootstrap)
+                .then(hydrateFromServer)
+                .then(() => {
+                  toast.success('Attendance correction saved and audited.');
+                  onClose();
+                })
+                .catch((caught: unknown) => {
+                  setError({ message: caught instanceof Error ? caught.message : 'Correction could not be saved.' });
+                });
             }}
           >
             Save correction

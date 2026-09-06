@@ -902,6 +902,7 @@ export const attendance: Attendance[] = [];
           correctionReason: null,
           correctedById: null,
           correctedAt: null,
+          version: 1,
         });
         continue;
       }
@@ -925,6 +926,7 @@ export const attendance: Attendance[] = [];
           correctionReason: null,
           correctedById: null,
           correctedAt: null,
+          version: 1,
         });
         continue;
       }
@@ -947,6 +949,7 @@ export const attendance: Attendance[] = [];
         correctionReason: null,
         correctedById: null,
         correctedAt: null,
+        version: 1,
       });
     }
   }
@@ -964,6 +967,7 @@ export const attendance: Attendance[] = [];
     correctionReason: null,
     correctedById: null,
     correctedAt: null,
+    version: 1,
   });
   void seq;
 }

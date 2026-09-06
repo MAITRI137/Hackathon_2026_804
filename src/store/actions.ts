@@ -1014,6 +1014,7 @@ export function checkIn(employeeId: string): ActionResult {
         correctionReason: null,
         correctedById: null,
         correctedAt: null,
+        version: 1,
       };
       d.attendance = [...d.attendance, record];
     }

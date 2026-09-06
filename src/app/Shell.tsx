@@ -24,7 +24,7 @@ import {
   pendingApprovalCount,
   unreadNotificationCount,
 } from '@/store/selectors';
-import { markNotificationsRead, switchRole } from '@/store/actions';
+import { markNotificationsRead } from '@/store/actions';
 import { connectDemoRole, signOut } from '@/lib/api';
 import { bootstrapPayroll } from '@/store/actions';
 import { hydrateFromServer } from '@/store/store';
@@ -100,14 +100,11 @@ export function Shell() {
         navigate('/');
         toast.show(`Now securely signed in as ${ROLE_LABEL[next]}`, 'success');
       } catch (error) {
-        switchRole(next);
-        setRoleMenu(false);
-        navigate('/');
         toast.show(
           error instanceof Error
-            ? `${error.message} Using the offline demo persona.`
-            : 'Using the offline demo persona.',
-          'warning',
+            ? error.message
+            : 'Could not switch account. Your signed-in session has not changed.',
+          'error',
         );
       } finally {
         setSwitchingRole(false);

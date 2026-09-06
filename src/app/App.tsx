@@ -200,6 +200,39 @@ export function App() {
     };
   }, [enter]);
 
+  // SSE events carry only safe change metadata. Every client rehydrates its
+  // own RBAC-scoped server snapshot, so another user's action is visible
+  // without making browser state a second business database.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    let active = true;
+    let refreshing = false;
+    const refresh = () => {
+      if (refreshing) return;
+      refreshing = true;
+      void restoreSession()
+        .then((payload) => {
+          if (active) hydrateFromServer(payload);
+        })
+        .catch(() => {
+          if (active) setPhase('signed-out');
+        })
+        .finally(() => {
+          refreshing = false;
+        });
+    };
+    const events = new EventSource('/api/events');
+    events.addEventListener('domain', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      active = false;
+      events.close();
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, [phase]);
+
   if (phase === 'checking') {
     return (
       <div className="boot" role="status" aria-live="polite">

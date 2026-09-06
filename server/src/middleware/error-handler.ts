@@ -22,6 +22,7 @@ export const errorHandler: ErrorRequestHandler = (error, request, response, next
         ? 'Invalid request.'
         : 'Internal server error.';
   const recovery = error instanceof AppError ? error.recovery : undefined;
+  const details = error instanceof AppError ? error.details : undefined;
 
   if (env.NODE_ENV !== 'test') {
     console.error({ requestId: request.requestId, status, error });
@@ -29,5 +30,5 @@ export const errorHandler: ErrorRequestHandler = (error, request, response, next
 
   response
     .status(status)
-    .json({ error: { code, message, recovery, requestId: request.requestId } });
+    .json({ error: { code, message, recovery, details, requestId: request.requestId } });
 };

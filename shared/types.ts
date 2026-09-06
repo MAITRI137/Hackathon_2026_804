@@ -225,6 +225,7 @@ export interface Attendance {
   correctionReason: string | null;
   correctedById: string | null;
   correctedAt: string | null;
+  version: number;
 }
 
 /* ── Time off ──────────────────────────────────────────────── */

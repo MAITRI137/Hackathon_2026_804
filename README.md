@@ -22,9 +22,6 @@
   <a href="#verification">Verification</a>
 </p>
 
-> [!NOTE]
-> **Judge-friendly summary:** PeoplePay360 turns payroll from a final “Compute” button into a controlled workflow. It finds source-data blockers before validation, explains each payslip line back to its rule and input records, limits every persona to the data they need, and lets an administrator watch the live request path without exposing employee details.
-
 ## The product
 
 Payroll errors rarely begin in payroll. They begin in a missing bank record, an overlapping contract, an open attendance punch, or a rule that nobody can explain after it changes.

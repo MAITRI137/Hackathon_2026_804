@@ -49,10 +49,9 @@ import { DUPLICATE_PAYSLIP_EMPLOYEE } from '@/data/seed';
 /* ── result envelope ───────────────────────────────────────── */
 
 export type ActionResult<T = void> =
-  | { ok: true; value: T; message: string }
-  | { ok: false; error: string; field?: string };
+  { ok: true; value: T; message: string } | { ok: false; error: string; field?: string };
 
-const ok = <T,>(value: T, message = ''): ActionResult<T> => ({ ok: true, value, message });
+const ok = <T>(value: T, message = ''): ActionResult<T> => ({ ok: true, value, message });
 const fail = (error: string, field?: string): ActionResult<never> => ({ ok: false, error, field });
 
 /* ── audit ─────────────────────────────────────────────────── */
@@ -115,9 +114,15 @@ export function computeActivePayrun(): ActionResult<{ count: number; failures: n
     // The seeded duplicate exists until an operator removes it.
     const dupSource = slips.find((p) => p.employeeId === DUPLICATE_PAYSLIP_EMPLOYEE);
     const alreadyRemoved = d.payslips.some(
-      (p) => p.payrunId === pr.id && p.employeeId === DUPLICATE_PAYSLIP_EMPLOYEE && p.status === 'CANCELLED',
+      (p) =>
+        p.payrunId === pr.id &&
+        p.employeeId === DUPLICATE_PAYSLIP_EMPLOYEE &&
+        p.status === 'CANCELLED',
     );
-    const duplicateCleared = d.payslips.length > 0 && !d.payslips.some((p) => p.isDuplicate && p.payrunId === pr.id) && d.payslips.some((p) => p.payrunId === pr.id);
+    const duplicateCleared =
+      d.payslips.length > 0 &&
+      !d.payslips.some((p) => p.isDuplicate && p.payrunId === pr.id) &&
+      d.payslips.some((p) => p.payrunId === pr.id);
     if (dupSource && !alreadyRemoved && !duplicateCleared) {
       slips = [...slips, makeDuplicate(dupSource)];
     }
@@ -125,7 +130,10 @@ export function computeActivePayrun(): ActionResult<{ count: number; failures: n
     d.payslips = [...d.payslips.filter((p) => p.payrunId !== pr.id), ...slips];
     pr.status = pr.status === 'DRAFT' ? 'COMPUTED' : pr.status;
     pr.computedAt = at;
-    pr.inputSnapshotHash = slips.map((p) => p.snapshotHash).join('').slice(0, 16);
+    pr.inputSnapshotHash = slips
+      .map((p) => p.snapshotHash)
+      .join('')
+      .slice(0, 16);
     pr.version += 1;
     if (d.settings.autoFreezeAtCutoff) pr.isFrozen = true;
 
@@ -157,7 +165,11 @@ export function bootstrapPayroll(): void {
         ...d.payslips.filter((p) => p.payrunId !== pr.id),
         ...outcome.payslips.map((p) => ({
           ...p,
-          status: (pr.status === 'PAID' ? 'PAID' : 'COMPUTED') as Payslip['status'],
+          status: (pr.status === 'PAID'
+            ? 'PAID'
+            : pr.status === 'VALIDATED'
+              ? 'VALIDATED'
+              : 'COMPUTED') as Payslip['status'],
           delivery: (pr.status === 'PAID' ? 'SENT' : 'PENDING') as Payslip['delivery'],
           deliveredAt: pr.status === 'PAID' ? pr.paidAt : null,
           paymentStatus: (pr.status === 'PAID' ? 'PAID' : 'UNPAID') as Payslip['paymentStatus'],
@@ -165,8 +177,19 @@ export function bootstrapPayroll(): void {
       ];
     });
   }
-  // Then compute the open period, which seeds the three demo blockers.
-  computeActivePayrun();
+  // The open period is a non-persistent preview until the operator presses
+  // Compute. That keeps server status authoritative while still making the
+  // missing inputs visible before an irreversible payroll action.
+  const active = getState().payruns.find((item) => item.id === getState().activePayrunId);
+  if (active?.status === 'DRAFT') {
+    const outcome = computePayrun(getState(), active, new Date().toISOString());
+    setState((draft) => {
+      draft.payslips = [
+        ...draft.payslips.filter((item) => item.payrunId !== active.id),
+        ...outcome.payslips,
+      ];
+    });
+  }
 }
 
 export function validateActivePayrun(): ActionResult {
@@ -191,7 +214,13 @@ export function validateActivePayrun(): ActionResult {
     d.payslips = d.payslips.map((p) =>
       p.payrunId === pr.id && p.status !== 'CANCELLED' ? { ...p, status: 'VALIDATED' } : p,
     );
-    audit(d, 'PAYRUN_VALIDATED', 'Payrun', pr.id, `${monthLabel(pr.periodStart)} validated with 0 blockers`);
+    audit(
+      d,
+      'PAYRUN_VALIDATED',
+      'Payrun',
+      pr.id,
+      `${monthLabel(pr.periodStart)} validated with 0 blockers`,
+    );
   });
   return ok(undefined, `${monthLabel(payrun.periodStart)} payroll validated`);
 }
@@ -267,7 +296,11 @@ export function reopenPayrun(reason: string): ActionResult {
 }
 
 /** X07 — clone the previous period: selection and structure, never money. */
-export function createPayrunFromPrevious(): ActionResult<{ id: string; added: string[]; removed: string[] }> {
+export function createPayrunFromPrevious(): ActionResult<{
+  id: string;
+  added: string[];
+  removed: string[];
+}> {
   const s = getState();
   const latest = [...s.payruns].sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
   if (!latest) return fail('No previous payrun to clone.');
@@ -357,7 +390,13 @@ export function createPayrun(input: {
       },
     ];
     d.activePayrunId = id;
-    audit(d, 'PAYRUN_CREATED', 'Payrun', id, `${monthLabel(start)} created with ${input.employeeIds.length} employees`);
+    audit(
+      d,
+      'PAYRUN_CREATED',
+      'Payrun',
+      id,
+      `${monthLabel(start)} created with ${input.employeeIds.length} employees`,
+    );
   });
   return ok({ id }, `${monthLabel(start)} payroll created`);
 }
@@ -381,7 +420,8 @@ export function togglePayrunEmployee(employeeId: string, include: boolean): Acti
     pr.employeeIds = include
       ? [...new Set([...pr.employeeIds, employeeId])]
       : pr.employeeIds.filter((x) => x !== employeeId);
-    if (!include) d.payslips = d.payslips.filter((p) => !(p.payrunId === pr.id && p.employeeId === employeeId));
+    if (!include)
+      d.payslips = d.payslips.filter((p) => !(p.payrunId === pr.id && p.employeeId === employeeId));
   });
   return ok(undefined, include ? 'Added to payrun' : 'Removed from payrun');
 }
@@ -463,7 +503,9 @@ export function retryDelivery(messageId: string): ActionResult {
             ...m,
             status: stillBad ? 'FAILED' : 'SENT',
             sentAt: stillBad ? null : new Date().toISOString(),
-            error: stillBad ? 'Recipient address rejected by mail server (550 unknown mailbox)' : null,
+            error: stillBad
+              ? 'Recipient address rejected by mail server (550 unknown mailbox)'
+              : null,
           }
         : m,
     );
@@ -580,7 +622,13 @@ export function cancelDuplicatePayslip(payslipId: string): ActionResult {
   }
   setState((d) => {
     d.payslips = d.payslips.filter((p) => p.id !== payslipId);
-    audit(d, 'PAYSLIP_CANCELLED', 'Payslip', payslipId, `Duplicate payslip ${slip.payslipRef} removed`);
+    audit(
+      d,
+      'PAYSLIP_CANCELLED',
+      'Payslip',
+      payslipId,
+      `Duplicate payslip ${slip.payslipRef} removed`,
+    );
   });
   return ok(undefined, 'Duplicate payslip removed');
 }
@@ -669,8 +717,26 @@ export function createEmployee(input: NewEmployeeInput): ActionResult<Employee> 
     d.contracts = [...d.contracts, contract];
     d.leaveAllocations = [
       ...d.leaveAllocations,
-      { id: `la-${id}-annual`, employeeId: id, leaveTypeId: 'lt-annual', allocated: 24, used: 0, carriedForward: 0, validFrom: '2026-01-01', validTo: '2026-12-31' },
-      { id: `la-${id}-sick`, employeeId: id, leaveTypeId: 'lt-sick', allocated: 8, used: 0, carriedForward: 0, validFrom: '2026-01-01', validTo: '2026-12-31' },
+      {
+        id: `la-${id}-annual`,
+        employeeId: id,
+        leaveTypeId: 'lt-annual',
+        allocated: 24,
+        used: 0,
+        carriedForward: 0,
+        validFrom: '2026-01-01',
+        validTo: '2026-12-31',
+      },
+      {
+        id: `la-${id}-sick`,
+        employeeId: id,
+        leaveTypeId: 'lt-sick',
+        allocated: 8,
+        used: 0,
+        carriedForward: 0,
+        validFrom: '2026-01-01',
+        validTo: '2026-12-31',
+      },
     ];
     // Y10 — onboarding instantiates automatically and feeds payroll readiness.
     d.checklists = [
@@ -681,14 +747,52 @@ export function createEmployee(input: NewEmployeeInput): ActionResult<Employee> 
         type: 'ONBOARDING',
         createdAt: new Date().toISOString(),
         items: [
-          { id: `${id}-c1`, label: 'Signed contract on file', ownerRole: 'HR_MANAGER', dueDate: addDays(input.joinDate, 7), blocksPayroll: true, completedAt: new Date().toISOString(), completedById: currentUser(d).id },
-          { id: `${id}-c2`, label: 'Bank details verified', ownerRole: 'HR_PAYROLL_USER', dueDate: addDays(input.joinDate, 10), blocksPayroll: true, completedAt: null, completedById: null },
-          { id: `${id}-c3`, label: 'Working schedule assigned', ownerRole: 'HR_MANAGER', dueDate: addDays(input.joinDate, 3), blocksPayroll: true, completedAt: new Date().toISOString(), completedById: currentUser(d).id },
-          { id: `${id}-c4`, label: 'Laptop and access provisioned', ownerRole: 'ADMIN', dueDate: addDays(input.joinDate, 2), blocksPayroll: false, completedAt: null, completedById: null },
+          {
+            id: `${id}-c1`,
+            label: 'Signed contract on file',
+            ownerRole: 'HR_MANAGER',
+            dueDate: addDays(input.joinDate, 7),
+            blocksPayroll: true,
+            completedAt: new Date().toISOString(),
+            completedById: currentUser(d).id,
+          },
+          {
+            id: `${id}-c2`,
+            label: 'Bank details verified',
+            ownerRole: 'HR_PAYROLL_USER',
+            dueDate: addDays(input.joinDate, 10),
+            blocksPayroll: true,
+            completedAt: null,
+            completedById: null,
+          },
+          {
+            id: `${id}-c3`,
+            label: 'Working schedule assigned',
+            ownerRole: 'HR_MANAGER',
+            dueDate: addDays(input.joinDate, 3),
+            blocksPayroll: true,
+            completedAt: new Date().toISOString(),
+            completedById: currentUser(d).id,
+          },
+          {
+            id: `${id}-c4`,
+            label: 'Laptop and access provisioned',
+            ownerRole: 'ADMIN',
+            dueDate: addDays(input.joinDate, 2),
+            blocksPayroll: false,
+            completedAt: null,
+            completedById: null,
+          },
         ],
       },
     ];
-    audit(d, 'EMPLOYEE_CREATED', 'Employee', id, `${employee.fullName} added to ${d.departments.find((x) => x.id === input.departmentId)?.name}`);
+    audit(
+      d,
+      'EMPLOYEE_CREATED',
+      'Employee',
+      id,
+      `${employee.fullName} added to ${d.departments.find((x) => x.id === input.departmentId)?.name}`,
+    );
   });
 
   return ok(employee, `${employee.fullName} created`);
@@ -804,7 +908,13 @@ export function createContract(input: ContractInput): ActionResult<Contract> {
   };
   setState((d) => {
     d.contracts = [...d.contracts, contract];
-    audit(d, 'CONTRACT_CREATED', 'Contract', contract.id, `${ref} created for ${d.employees.find((e) => e.id === input.employeeId)?.fullName}`);
+    audit(
+      d,
+      'CONTRACT_CREATED',
+      'Contract',
+      contract.id,
+      `${ref} created for ${d.employees.find((e) => e.id === input.employeeId)?.fullName}`,
+    );
   });
   return ok(contract, `${ref} created`);
 }
@@ -862,9 +972,17 @@ export function terminateContract(id: string, endDate: string, reason: string): 
   if (endDate < c.startDate) return fail('End date cannot be before the start date.', 'endDate');
   setState((d) => {
     d.contracts = d.contracts.map((x) =>
-      x.id === id ? { ...x, endDate, status: 'TERMINATED', notes: reason, version: x.version + 1 } : x,
+      x.id === id
+        ? { ...x, endDate, status: 'TERMINATED', notes: reason, version: x.version + 1 }
+        : x,
     );
-    audit(d, 'CONTRACT_TERMINATED', 'Contract', id, `${c.contractRef} terminated on ${formatDate(endDate)} — ${reason}`);
+    audit(
+      d,
+      'CONTRACT_TERMINATED',
+      'Contract',
+      id,
+      `${c.contractRef} terminated on ${formatDate(endDate)} — ${reason}`,
+    );
   });
   return ok(undefined, `${c.contractRef} terminated`);
 }
@@ -906,9 +1024,7 @@ export function checkIn(employeeId: string): ActionResult {
 
 export function checkOut(employeeId: string): ActionResult<{ minutes: number }> {
   const s = getState();
-  const record = s.attendance.find(
-    (a) => a.employeeId === employeeId && a.checkIn && !a.checkOut,
-  );
+  const record = s.attendance.find((a) => a.employeeId === employeeId && a.checkIn && !a.checkOut);
   if (!record) return fail('You are not currently checked in.');
   const now = new Date();
   let minutes = now.getHours() * 60 + now.getMinutes();
@@ -975,14 +1091,18 @@ export function applyRegularizations(ids: string[]): ActionResult<{ count: numbe
     for (const rec of proposals) {
       const emp = d.employees.find((e) => e.id === rec.employeeId);
       const sch = d.schedules.find((x) => x.id === emp?.workingScheduleId) ?? d.schedules[0];
-      const line = sch.lines.find((l) => l.dayOfWeek === new Date(rec.date).getDay()) ?? sch.lines[0];
+      const line =
+        sch.lines.find((l) => l.dayOfWeek === new Date(rec.date).getDay()) ?? sch.lines[0];
       const proposed = line.end;
       d.attendance = d.attendance.map((a) =>
         a.id === rec.id
           ? {
               ...a,
               checkOut: proposed,
-              workedMinutes: Math.max(0, minutesOfDay(proposed) - minutesOfDay(a.checkIn!) - line.breakMinutes),
+              workedMinutes: Math.max(
+                0,
+                minutesOfDay(proposed) - minutesOfDay(a.checkIn!) - line.breakMinutes,
+              ),
               status: 'PRESENT',
               source: 'SYSTEM',
               correctionReason: `Auto-regularized to scheduled end time (${proposed}) from ${sch.name}`,
@@ -1000,7 +1120,10 @@ export function applyRegularizations(ids: string[]): ActionResult<{ count: numbe
       `${proposals.length} record${proposals.length === 1 ? '' : 's'} regularized from schedule`,
     );
   });
-  return ok({ count: proposals.length }, `${proposals.length} record${proposals.length === 1 ? '' : 's'} regularized`);
+  return ok(
+    { count: proposals.length },
+    `${proposals.length} record${proposals.length === 1 ? '' : 's'} regularized`,
+  );
 }
 
 /* ── time off ──────────────────────────────────────────────── */
@@ -1033,7 +1156,8 @@ export function requestLeave(input: {
   const s = getState();
   if (!input.fromDate) return fail('Select a start date.', 'fromDate');
   if (!input.toDate) return fail('Select an end date.', 'toDate');
-  if (input.toDate < input.fromDate) return fail('End date cannot be before the start date.', 'toDate');
+  if (input.toDate < input.fromDate)
+    return fail('End date cannot be before the start date.', 'toDate');
 
   const type = s.leaveTypes.find((t) => t.id === input.leaveTypeId);
   if (!type) return fail('Select a leave type.', 'leaveTypeId');
@@ -1051,7 +1175,14 @@ export function requestLeave(input: {
     );
   }
 
-  const days = countLeaveDays(s, input.employeeId, input.fromDate, input.toDate, input.halfDayStart, input.halfDayEnd);
+  const days = countLeaveDays(
+    s,
+    input.employeeId,
+    input.fromDate,
+    input.toDate,
+    input.halfDayStart,
+    input.halfDayEnd,
+  );
   if (days <= 0) {
     return fail('That range contains no working days for this employee.', 'fromDate');
   }
@@ -1097,8 +1228,7 @@ export function requestLeave(input: {
   };
 
   // Y03 — deterministic auto-approval policy, fully audited and reversible.
-  const autoApprove =
-    s.settings.autoApproveShortSickLeave && type.code === 'SICK' && days <= 1;
+  const autoApprove = s.settings.autoApproveShortSickLeave && type.code === 'SICK' && days <= 1;
 
   setState((d) => {
     if (autoApprove) {
@@ -1198,9 +1328,7 @@ export function cancelLeave(id: string): ActionResult {
   if (req.status === 'CANCELLED') return fail('Already cancelled.');
   setState((d) => {
     if (req.status === 'APPROVED') releaseAllocation(d, req);
-    d.leaveRequests = d.leaveRequests.map((r) =>
-      r.id === id ? { ...r, status: 'CANCELLED' } : r,
-    );
+    d.leaveRequests = d.leaveRequests.map((r) => (r.id === id ? { ...r, status: 'CANCELLED' } : r));
     audit(d, 'LEAVE_CANCELLED', 'LeaveRequest', id, 'Request cancelled');
   });
   return ok(undefined, 'Leave request cancelled');
@@ -1238,7 +1366,13 @@ export function grantAllocation(
         ];
       }
     }
-    audit(d, 'ALLOCATION_GRANTED', 'LeaveAllocation', leaveTypeId, `${days} days granted to ${employeeIds.length} employees`);
+    audit(
+      d,
+      'ALLOCATION_GRANTED',
+      'LeaveAllocation',
+      leaveTypeId,
+      `${days} days granted to ${employeeIds.length} employees`,
+    );
   });
   return ok({ count: employeeIds.length }, `Allocation granted to ${employeeIds.length} employees`);
 }
@@ -1254,7 +1388,8 @@ export function decideProfileChange(
   const req = s.profileChangeRequests.find((r) => r.id === id);
   if (!req) return fail('Request not found');
   if (req.status !== 'PENDING') return fail(`Already ${req.status.toLowerCase()}.`);
-  if (decision === 'REFUSED' && !note.trim()) return fail('A note is required when refusing.', 'note');
+  if (decision === 'REFUSED' && !note.trim())
+    return fail('A note is required when refusing.', 'note');
 
   setState((d) => {
     d.profileChangeRequests = d.profileChangeRequests.map((r) =>
@@ -1288,7 +1423,10 @@ export function decideProfileChange(
       `${req.field}: ${req.currentValue} → ${req.requestedValue}`,
     );
   });
-  return ok(undefined, decision === 'APPROVED' ? 'Profile change applied' : 'Profile change refused');
+  return ok(
+    undefined,
+    decision === 'APPROVED' ? 'Profile change applied' : 'Profile change refused',
+  );
 }
 
 export function decideSalaryChange(
@@ -1300,12 +1438,18 @@ export function decideSalaryChange(
   const req = s.salaryChangeRequests.find((r) => r.id === id);
   if (!req) return fail('Request not found');
   if (req.status !== 'PENDING') return fail(`Already ${req.status.toLowerCase()}.`);
-  if (decision === 'REFUSED' && !note.trim()) return fail('A note is required when refusing.', 'note');
+  if (decision === 'REFUSED' && !note.trim())
+    return fail('A note is required when refusing.', 'note');
 
   setState((d) => {
     d.salaryChangeRequests = d.salaryChangeRequests.map((r) =>
       r.id === id
-        ? { ...r, status: decision, decidedById: currentUser(d).id, decidedAt: new Date().toISOString() }
+        ? {
+            ...r,
+            status: decision,
+            decidedById: currentUser(d).id,
+            decidedAt: new Date().toISOString(),
+          }
         : r,
     );
     if (decision === 'APPROVED') {
@@ -1315,7 +1459,12 @@ export function decideSalaryChange(
       if (current) {
         d.contracts = d.contracts.map((c) =>
           c.id === current.id
-            ? { ...c, endDate: addDays(req.effectiveFrom, -1), status: 'EXPIRED', version: c.version + 1 }
+            ? {
+                ...c,
+                endDate: addDays(req.effectiveFrom, -1),
+                status: 'EXPIRED',
+                version: c.version + 1,
+              }
             : c,
         );
         d.contracts = [
@@ -1344,13 +1493,18 @@ export function decideSalaryChange(
   });
   return ok(
     undefined,
-    decision === 'APPROVED' ? 'Salary revision approved and contract updated' : 'Salary revision refused',
+    decision === 'APPROVED'
+      ? 'Salary revision approved and contract updated'
+      : 'Salary revision refused',
   );
 }
 
 /* ── batch operations ──────────────────────────────────────── */
 
-export function batchAssignSchedule(employeeIds: string[], scheduleId: string): ActionResult<{ count: number }> {
+export function batchAssignSchedule(
+  employeeIds: string[],
+  scheduleId: string,
+): ActionResult<{ count: number }> {
   if (employeeIds.length === 0) return fail('Nothing selected.');
   setState((d) => {
     d.employees = d.employees.map((e) =>
@@ -1372,7 +1526,10 @@ export function batchAssignSchedule(employeeIds: string[], scheduleId: string): 
   return ok({ count: employeeIds.length }, `${employeeIds.length} employees updated`);
 }
 
-export function batchAssignStructure(employeeIds: string[], structureId: string): ActionResult<{ count: number }> {
+export function batchAssignStructure(
+  employeeIds: string[],
+  structureId: string,
+): ActionResult<{ count: number }> {
   if (employeeIds.length === 0) return fail('Nothing selected.');
   setState((d) => {
     d.contracts = d.contracts.map((c) =>
@@ -1380,7 +1537,13 @@ export function batchAssignStructure(employeeIds: string[], structureId: string)
         ? { ...c, salaryStructureId: structureId, version: c.version + 1 }
         : c,
     );
-    audit(d, 'BATCH_STRUCTURE', 'Contract', employeeIds.join(','), `${employeeIds.length} contracts moved to a new structure`);
+    audit(
+      d,
+      'BATCH_STRUCTURE',
+      'Contract',
+      employeeIds.join(','),
+      `${employeeIds.length} contracts moved to a new structure`,
+    );
   });
   return ok({ count: employeeIds.length }, `${employeeIds.length} contracts updated`);
 }
@@ -1398,7 +1561,10 @@ export function batchAddToPayrun(employeeIds: string[]): ActionResult<{ count: n
     pr.employeeIds = [...new Set([...pr.employeeIds, ...employeeIds])];
     audit(d, 'BATCH_PAYRUN', 'Payrun', pr.id, `${added.length} employees added`);
   });
-  return ok({ count: added.length }, `${added.length} employees added to ${monthLabel(payrun.periodStart)}`);
+  return ok(
+    { count: added.length },
+    `${added.length} employees added to ${monthLabel(payrun.periodStart)}`,
+  );
 }
 
 /* ── salary rules ──────────────────────────────────────────── */
@@ -1453,15 +1619,18 @@ export function dismissNotification(id: string): ActionResult {
 export function updateSettings(patch: Partial<AppState['settings']>): ActionResult {
   setState((d) => {
     d.settings = { ...d.settings, ...patch };
-    audit(d, 'SETTINGS_UPDATED', 'AppSetting', Object.keys(patch).join(','), `Changed ${Object.keys(patch).join(', ')}`);
+    audit(
+      d,
+      'SETTINGS_UPDATED',
+      'AppSetting',
+      Object.keys(patch).join(','),
+      `Changed ${Object.keys(patch).join(', ')}`,
+    );
   });
   return ok(undefined, 'Setting saved');
 }
 
-export function updateUser(
-  id: string,
-  patch: { role?: Role; isActive?: boolean },
-): ActionResult {
+export function updateUser(id: string, patch: { role?: Role; isActive?: boolean }): ActionResult {
   const s = getState();
   const user = s.users.find((item) => item.id === id);
   if (!user) return fail('User not found');
@@ -1469,8 +1638,14 @@ export function updateUser(
     return fail('You cannot deactivate the account currently in use.');
   }
   setState((d) => {
-    d.users = d.users.map((item) => item.id === id ? { ...item, ...patch } : item);
-    audit(d, 'USER_ACCESS_UPDATED', 'User', id, `${user.displayName}: ${patch.role ?? user.role}, ${patch.isActive ?? user.isActive ? 'active' : 'inactive'}`);
+    d.users = d.users.map((item) => (item.id === id ? { ...item, ...patch } : item));
+    audit(
+      d,
+      'USER_ACCESS_UPDATED',
+      'User',
+      id,
+      `${user.displayName}: ${patch.role ?? user.role}, ${(patch.isActive ?? user.isActive) ? 'active' : 'inactive'}`,
+    );
   });
   return ok(undefined, 'User access updated');
 }
@@ -1516,12 +1691,23 @@ export function generateDocument(employeeId: string, kind: string): ActionResult
 
 /* ── saved views ───────────────────────────────────────────── */
 
-export function saveView(module: string, name: string, filters: Record<string, string>): ActionResult {
+export function saveView(
+  module: string,
+  name: string,
+  filters: Record<string, string>,
+): ActionResult {
   if (!name.trim()) return fail('Give the view a name.', 'name');
   setState((d) => {
     d.savedViews = [
       ...d.savedViews,
-      { id: nextId('view'), ownerId: currentUser(d).id, module, name: name.trim(), filters, createdAt: new Date().toISOString() },
+      {
+        id: nextId('view'),
+        ownerId: currentUser(d).id,
+        module,
+        name: name.trim(),
+        filters,
+        createdAt: new Date().toISOString(),
+      },
     ];
   });
   return ok(undefined, `View "${name.trim()}" saved`);

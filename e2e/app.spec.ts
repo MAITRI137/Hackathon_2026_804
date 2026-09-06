@@ -82,4 +82,9 @@ test('shows measured operations telemetry to an administrator', async ({ page })
   await expect(page.getByRole('img', { name: /Live system graph/i })).toBeVisible();
   // Record totals come from PostgreSQL, so the dataset size must be reported.
   await expect(page.getByText(/records across \d+ tables/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Run readiness scan' }).click();
+  await expect(page.getByRole('heading', { name: 'Payroll preflight' })).toBeVisible();
+  await expect(page.getByText('Records scanned', { exact: true })).toBeVisible();
+  await expect(page.getByText('Measured duration', { exact: true })).toBeVisible();
 });

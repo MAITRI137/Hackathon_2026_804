@@ -19,9 +19,10 @@ import {
 import type { PayrollException } from '@shared/types';
 import { formatDate, formatDuration, minutesOfDay } from '@shared/dates';
 import { formatMoney } from '@shared/money';
-import { useStore } from '@/store/store';
+import { hydrateFromServer, useStore } from '@/store/store';
 import { empById, payslipsOf } from '@/store/selectors';
-import { cancelDuplicatePayslip, fixMissingCheckout, saveBankDetails } from '@/store/actions';
+import { bootstrapPayroll, cancelDuplicatePayslip } from '@/store/actions';
+import { refreshBootstrap, resolvePayrunAttendance, resolvePayrunBank } from '@/lib/api';
 import { Avatar, Banner, Button, Chip, InfoGrid } from '@/ui/primitives';
 import { TextArea, TextInput } from '@/ui/form';
 import { Modal } from '@/ui/overlays';
@@ -117,7 +118,11 @@ function Header({ exception, children }: { exception: PayrollException; children
   const emp = empById(state, exception.employeeId);
   return (
     <div className="col gap3 mb4">
-      <Banner tone={exception.blocking ? 'danger' : 'warning'} icon={AlertTriangle} title={exception.title}>
+      <Banner
+        tone={exception.blocking ? 'danger' : 'warning'}
+        icon={AlertTriangle}
+        title={exception.title}
+      >
         {exception.detail}
       </Banner>
       {emp && (
@@ -155,17 +160,20 @@ function BankDetailsDialog({
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [pending, setPending] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     if (!exception.employeeId) return;
     setPending(true);
-    const r = saveBankDetails(exception.employeeId, form);
-    setPending(false);
-    if (!r.ok) {
-      setError({ field: r.field, message: r.error });
-      return;
+    try {
+      await resolvePayrunBank(state.activePayrunId, { employeeId: exception.employeeId, ...form });
+      hydrateFromServer(await refreshBootstrap());
+      bootstrapPayroll();
+      toast.success('Bank details verified — the blocker is cleared');
+      onClose();
+    } catch (err) {
+      setError({ message: err instanceof Error ? err.message : 'Could not save bank details.' });
+    } finally {
+      setPending(false);
     }
-    toast.success('Bank details verified — the blocker is cleared');
-    onClose();
   };
 
   const err = (f: string) => (error?.field === f ? error.message : undefined);
@@ -187,6 +195,11 @@ function BankDetailsDialog({
     >
       <Header exception={exception} />
       <div className="col gap4">
+        {error && !error.field && (
+          <Banner tone="danger" icon={AlertTriangle} title="Bank details were not saved">
+            {error.message}
+          </Banner>
+        )}
         <TextInput
           label="Account holder name"
           required
@@ -203,7 +216,9 @@ function BankDetailsDialog({
             placeholder="9–18 digits"
             value={form.accountNumber}
             error={err('accountNumber')}
-            onChange={(e) => setForm((f) => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '') }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '') }))
+            }
           />
           <TextInput
             label="IFSC code"
@@ -230,7 +245,13 @@ function BankDetailsDialog({
   );
 }
 
-function CheckoutDialog({ exception, onClose }: { exception: PayrollException; onClose: () => void }) {
+function CheckoutDialog({
+  exception,
+  onClose,
+}: {
+  exception: PayrollException;
+  onClose: () => void;
+}) {
   const toast = useToast();
   const state = useStore();
   const record = state.attendance.find((a) => a.id === exception.refId);
@@ -261,23 +282,32 @@ function CheckoutDialog({ exception, onClose }: { exception: PayrollException; o
       ? minutesOfDay(checkOut) - minutesOfDay(record.checkIn) - 60
       : 0;
 
-  const submit = () => {
+  const submit = async () => {
     if (!record) return;
     setPending(true);
-    const r = fixMissingCheckout(record.id, checkOut, reason);
-    setPending(false);
-    if (!r.ok) {
-      setError({ field: r.field, message: r.error });
-      return;
+    try {
+      await resolvePayrunAttendance(state.activePayrunId, {
+        attendanceId: record.id,
+        checkOut,
+        reason,
+      });
+      hydrateFromServer(await refreshBootstrap());
+      bootstrapPayroll();
+      toast.success('Checkout recorded — worked hours recalculated');
+      onClose();
+    } catch (err) {
+      setError({ message: err instanceof Error ? err.message : 'Could not save the correction.' });
+    } finally {
+      setPending(false);
     }
-    toast.success('Checkout recorded — worked hours recalculated');
-    onClose();
   };
 
   if (!record) {
     return (
       <Modal open onClose={onClose} title="Attendance record not found">
-        <p>The record this exception referred to no longer exists. Recompute the payrun to refresh.</p>
+        <p>
+          The record this exception referred to no longer exists. Recompute the payrun to refresh.
+        </p>
       </Modal>
     );
   }
@@ -309,6 +339,11 @@ function CheckoutDialog({ exception, onClose }: { exception: PayrollException; o
       </Header>
 
       <div className="col gap4">
+        {error && !error.field && (
+          <Banner tone="danger" icon={AlertTriangle} title="Checkout was not saved">
+            {error.message}
+          </Banner>
+        )}
         <div className="row gap2 wrap">
           <Button size="sm" onClick={() => setCheckOut(scheduledEnd)}>
             Use scheduled end ({scheduledEnd})
@@ -329,10 +364,15 @@ function CheckoutDialog({ exception, onClose }: { exception: PayrollException; o
           />
           <div className="field">
             <span className="field-l">Worked duration</span>
-            <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-3)' }}>
+            <div
+              className="input"
+              style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-3)' }}
+            >
               <span className="mono">{worked > 0 ? formatDuration(worked) : '—'}</span>
             </div>
-            <span className="field-hint">Derived from the timestamps, minus a 60-minute break.</span>
+            <span className="field-hint">
+              Derived from the timestamps, minus a 60-minute break.
+            </span>
           </div>
         </div>
 
@@ -345,21 +385,30 @@ function CheckoutDialog({ exception, onClose }: { exception: PayrollException; o
           onChange={(e) => setReason(e.target.value)}
         />
         <p className="field-hint">
-          The correction is recorded against your name in the audit trail and shown on the attendance row.
+          The correction is recorded against your name in the audit trail and shown on the
+          attendance row.
         </p>
       </div>
     </Modal>
   );
 }
 
-function DuplicateDialog({ exception, onClose }: { exception: PayrollException; onClose: () => void }) {
+function DuplicateDialog({
+  exception,
+  onClose,
+}: {
+  exception: PayrollException;
+  onClose: () => void;
+}) {
   const toast = useToast();
   const state = useStore();
   const emp = empById(state, exception.employeeId);
   const slips = payslipsOf(state, state.activePayrunId).filter(
     (p) => p.employeeId === exception.employeeId,
   );
-  const [selected, setSelected] = useState(exception.refId ?? slips.find((s) => s.isDuplicate)?.id ?? '');
+  const [selected, setSelected] = useState(
+    exception.refId ?? slips.find((s) => s.isDuplicate)?.id ?? '',
+  );
   const [pending, setPending] = useState(false);
 
   const submit = () => {
@@ -442,7 +491,13 @@ function DuplicateDialog({ exception, onClose }: { exception: PayrollException; 
   );
 }
 
-function ReviewDialog({ exception, onClose }: { exception: PayrollException; onClose: () => void }) {
+function ReviewDialog({
+  exception,
+  onClose,
+}: {
+  exception: PayrollException;
+  onClose: () => void;
+}) {
   const state = useStore();
   const emp = empById(state, exception.employeeId);
   return (
@@ -451,7 +506,11 @@ function ReviewDialog({ exception, onClose }: { exception: PayrollException; onC
       onClose={onClose}
       eyebrow="Exception detail"
       title={exception.title}
-      footer={<Button variant="primary" onClick={onClose}>Close</Button>}
+      footer={
+        <Button variant="primary" onClick={onClose}>
+          Close
+        </Button>
+      }
     >
       <Header exception={exception} />
       <InfoGrid

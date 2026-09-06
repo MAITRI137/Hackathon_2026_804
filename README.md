@@ -39,29 +39,30 @@ PeoplePay360 brings those inputs into one coherent workspace and makes correctne
 
 ### Submission at a glance
 
-| Area                    | What is implemented                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| **Scale**               | Deterministic seed with **297 employees** and **5,115 persisted operational records**  |
-| **Payroll correctness** | Decimal arithmetic, ordered rules, per-line rounding and reconciliation checks         |
-| **Control**             | Readiness scoring, blocking exceptions, warnings and guarded workflow transitions      |
-| **Explainability**      | Rule, formula, evaluated inputs and source references on every payslip line            |
-| **Security**            | Argon2id passwords, PostgreSQL-backed HttpOnly sessions, origin checks and server RBAC |
-| **Operations**          | Admin-only live node graph backed by real API, process and database measurements       |
-| **Quality**             | 15 integration tests and 8 Playwright browser journeys in the repository               |
+| Area                    | What is implemented                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| **Scale**               | Deterministic seed with **297 employees** and **5,115 persisted operational records**     |
+| **Payroll correctness** | Decimal arithmetic, ordered rules, per-line rounding and reconciliation checks            |
+| **Control**             | Transactional source fixes, guarded transitions and an immutable payroll decision receipt |
+| **Explainability**      | Rule, formula, evaluated inputs and source references on every payslip line               |
+| **Security**            | Argon2id passwords, PostgreSQL-backed HttpOnly sessions, origin checks and server RBAC    |
+| **Operations**          | Admin-only live node graph plus a measured, on-demand payroll preflight                   |
+| **Quality**             | 17 integration tests and 8 Playwright browser journeys in the repository                  |
 
 ## Why it is different
 
 ### Generic payroll vs PeoplePay360
 
-| Generic payroll software                     | PeoplePay360                                               |
-| -------------------------------------------- | ---------------------------------------------------------- |
-| Computes first and surfaces bad inputs later | Runs a readiness gate before validation                    |
-| Marks an exception “resolved”                | Fixes the underlying bank, attendance or payslip record    |
-| Shows only a final amount                    | Traces every line to its rule, formula, inputs and sources |
-| Hides links as a substitute for security     | Enforces the same role matrix on server endpoints          |
-| Uses floating-point numbers casually         | Uses PostgreSQL `NUMERIC(18,2)` and `decimal.js` for money |
-| Gives everyone the same dashboard            | Adapts navigation, actions and data scope to each persona  |
-| Offers a static health badge                 | Draws measured requests, reads and database activity live  |
+| Generic payroll software                     | PeoplePay360                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| Computes first and surfaces bad inputs later | Runs a readiness gate before validation                                  |
+| Marks an exception “resolved”                | Fixes the underlying bank, attendance or payslip record                  |
+| Relies on a browser to remember approval     | Stores a server-issued receipt with the input hash, amount and approvers |
+| Shows only a final amount                    | Traces every line to its rule, formula, inputs and sources               |
+| Hides links as a substitute for security     | Enforces the same role matrix on server endpoints                        |
+| Uses floating-point numbers casually         | Uses PostgreSQL `NUMERIC(18,2)` and `decimal.js` for money               |
+| Gives everyone the same dashboard            | Adapts navigation, actions and data scope to each persona                |
+| Offers a static health badge                 | Draws measured requests, reads and database activity live                |
 
 ```mermaid
 flowchart LR
@@ -82,12 +83,13 @@ flowchart LR
   class F,G,H success
 ```
 
-### Four decisions that make the product credible
+### Five decisions that make the product credible
 
-1. **Readiness is derived, not manually toggled.** Resolving a blocker changes its source data; the next readiness calculation simply stops finding that problem.
+1. **Readiness is derived, not manually toggled.** Resolving a blocker transactionally changes its source data; the next server-side readiness calculation simply stops finding that problem.
 2. **Payslips preserve provenance.** Each line keeps the rule version, sequence, formula, inputs and source references that produced its amount.
 3. **Money has one safe path.** Database decimals become fixed-precision `Decimal` values, each rule rounds once, and net pay reconciles from already-rounded lines.
 4. **Operational visibility is privacy-safe.** The admin console reports aggregate traffic and table counts, never names, emails, salaries or addresses.
+5. **Payroll approval produces evidence.** Validation creates a database receipt that records the exact input hash, readiness score, headcount, net total and approver; payment then completes that same record.
 
 ## Experience by role
 
@@ -121,7 +123,7 @@ The navigation, command launcher and page controls use the same permission vocab
     </td>
     <td width="50%" valign="top">
       <h3>Live System Health</h3>
-      An animated node graph follows Browser → API → Prisma → PostgreSQL while adjacent panels show live request rate, records read, latency percentiles and table volume.
+      An animated node graph follows Browser → API → Prisma → PostgreSQL while adjacent panels show live request rate, records read, latency percentiles, table volume and an on-demand payroll preflight.
     </td>
   </tr>
   <tr>
@@ -157,7 +159,7 @@ flowchart TB
   subgraph API[Express 5 API]
     MW[Request ID, metrics, Helmet, JSON and origin guard]
     AU[Session authentication and RBAC]
-    RT[Health, auth, bootstrap and ops routes]
+    RT[Health, auth, bootstrap, payroll commands and ops routes]
     MW --> AU --> RT
   end
 
@@ -206,18 +208,23 @@ sequenceDiagram
 
 ### API surface
 
-| Method | Endpoint             | Access                     | Purpose                                                          |
-| ------ | -------------------- | -------------------------- | ---------------------------------------------------------------- |
-| `GET`  | `/api/health`        | Public                     | Process and database readiness                                   |
-| `POST` | `/api/auth/login`    | Public                     | Validate credentials, apply lockout controls and start a session |
-| `GET`  | `/api/auth/me`       | Authenticated              | Restore a valid session and return safe user data                |
-| `POST` | `/api/auth/logout`   | Authenticated              | Destroy the server session and clear its cookie                  |
-| `POST` | `/api/auth/password` | Authenticated              | Verify the old password, hash the new one and rotate the session |
-| `GET`  | `/api/bootstrap`     | Authenticated, role-scoped | Load the caller's permitted working set and SQL aggregates       |
-| `GET`  | `/api/ops/metrics`   | Administrator only         | Return anonymous live application and database telemetry         |
+| Method | Endpoint                              | Access                     | Purpose                                                              |
+| ------ | ------------------------------------- | -------------------------- | -------------------------------------------------------------------- |
+| `GET`  | `/api/health`                         | Public                     | Process and database readiness                                       |
+| `POST` | `/api/auth/login`                     | Public                     | Validate credentials, apply lockout controls and start a session     |
+| `GET`  | `/api/auth/me`                        | Authenticated              | Restore a valid session and return safe user data                    |
+| `POST` | `/api/auth/logout`                    | Authenticated              | Destroy the server session and clear its cookie                      |
+| `POST` | `/api/auth/password`                  | Authenticated              | Verify the old password, hash the new one and rotate the session     |
+| `GET`  | `/api/bootstrap`                      | Authenticated, role-scoped | Load the caller's permitted working set and SQL aggregates           |
+| `POST` | `/api/payruns/:id/compute`            | Payroll compute            | Rebuild an authoritative payroll snapshot from PostgreSQL            |
+| `POST` | `/api/payruns/:id/blockers/*/resolve` | Payroll manager            | Transactionally correct bank or attendance inputs                    |
+| `POST` | `/api/payruns/:id/validate`           | Payroll manager            | Guard readiness, validate the snapshot and persist decision evidence |
+| `POST` | `/api/payruns/:id/mark-paid`          | Payroll manager            | Freeze the run and complete its decision receipt                     |
+| `GET`  | `/api/ops/metrics`                    | Administrator only         | Return anonymous live application and database telemetry             |
+| `POST` | `/api/ops/readiness-scan`             | Administrator only         | Measure a server-side scan across persisted payroll inputs           |
 
 > [!IMPORTANT]
-> **Current implementation boundary:** authentication, session state, bootstrap reads, role scoping, health and ops telemetry are server-backed. The interactive HR/payroll edit flows operate on the hydrated client snapshot for the hackathon demonstration; they do not yet persist through write APIs. Reloading restores the seeded database state. Production hardening should add transactional command endpoints, optimistic concurrency, audit persistence and background delivery workers.
+> **Current implementation boundary:** authentication, session state, bootstrap reads, role scoping, health, operations telemetry and the core payroll decision path are server-backed. Bank and attendance corrections, compute, validate and mark-paid execute through validated transactions; validation and payment create a persistent decision receipt. Some non-core HR convenience flows remain client-snapshot demonstrations. Production hardening should add optimistic concurrency/idempotency to every write, full durable payslip materialisation and background delivery workers.
 
 ### Repository map
 
@@ -242,12 +249,12 @@ sequenceDiagram
 | **React 19 + TypeScript**    | Component-driven role experiences with compile-time contracts across UI, API payloads and payroll data |
 | **Vite 8**                   | Fast development feedback and an optimized client build                                                |
 | **React Router 7**           | Nested application routes, parameterized employee/payslip pages and permission wrappers                |
-| **Express 5**                | A small, explicit HTTP boundary for sessions, RBAC, bootstrap data and telemetry                       |
+| **Express 5**                | A small, explicit HTTP boundary for sessions, RBAC, bootstrap data, payroll commands and telemetry     |
 | **Prisma 6**                 | Typed PostgreSQL queries, transactions, relations and repeatable migrations                            |
 | **PostgreSQL 17**            | Relational integrity and exact numeric storage for contracts, payroll and audit data                   |
 | **Argon2 + express-session** | Memory-hard password hashing and revocable server-side sessions instead of browser-stored auth tokens  |
 | **decimal.js + mathjs**      | Precise money operations and a restricted formula evaluator for salary rules                           |
-| **Zod**                      | Runtime validation at authentication and password-change boundaries                                    |
+| **Zod**                      | Runtime validation for authentication, source corrections and command payloads                         |
 | **Vitest + Supertest**       | Fast integration checks against the real Express application and PostgreSQL data                       |
 | **Playwright**               | Real-browser verification of sign-in, privacy, responsive navigation, explainability and telemetry     |
 

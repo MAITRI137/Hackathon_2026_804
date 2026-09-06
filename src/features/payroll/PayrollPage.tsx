@@ -11,6 +11,7 @@ import {
   BadgeIndianRupee,
   CalendarPlus,
   CircleCheck,
+  FileCheck2,
   Lock,
   LockOpen,
   RefreshCw,
@@ -23,7 +24,7 @@ import {
 import { can } from '@shared/permissions';
 import { formatMoney, formatMoneyShort } from '@shared/money';
 import { formatDate, formatDateTime, monthLabel } from '@shared/dates';
-import { useStore } from '@/store/store';
+import { hydrateFromServer, useStore } from '@/store/store';
 import {
   activePayrun,
   canValidate,
@@ -35,15 +36,14 @@ import {
 } from '@/store/selectors';
 import { netLabel } from '@/store/payroll';
 import {
-  computeActivePayrun,
+  bootstrapPayroll,
   createPayrunFromPrevious,
-  markActivePayrunPaid,
   reopenPayrun,
   sendPayslips,
   setActivePayrun,
   setPayrunFrozen,
-  validateActivePayrun,
 } from '@/store/actions';
+import { computePayrun, markPayrunPaid, refreshBootstrap, validatePayrun } from '@/lib/api';
 import { Page } from '@/app/Page';
 import { Banner, Button, Card, Chip, Metric } from '@/ui/primitives';
 import { Select, TextArea } from '@/ui/form';
@@ -73,6 +73,7 @@ export function PayrollPage() {
   const totals = useMemo(() => totalsFor(state, payrun.id), [state, payrun.id]);
   const nba = useMemo(() => nextBestAction(state), [state]);
   const validate = canValidate(state, payrun);
+  const receipt = state.decisionReceipts.find((item) => item.payrunId === payrun.id);
 
   const [resolving, setResolving] = useState<PayrollException | null>(null);
   const [confirm, setConfirm] = useState<'validate' | 'pay' | 'send' | null>(null);
@@ -92,6 +93,24 @@ export function PayrollPage() {
     setBusy(null);
     toast.result(r);
     setConfirm(null);
+  };
+
+  const runServer = async (key: string, task: () => Promise<unknown>, message: string) => {
+    if (busy) return;
+    setBusy(key);
+    try {
+      await task();
+      hydrateFromServer(await refreshBootstrap());
+      bootstrapPayroll();
+      toast.success(message);
+      setConfirm(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'The server could not complete this payroll action.',
+      );
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -139,7 +158,9 @@ export function PayrollPage() {
           <div className="row gap5 wrap" style={{ alignItems: 'flex-start' }}>
             <div className="grow" style={{ minWidth: 200 }}>
               <div className="eyebrow">Active payrun</div>
-              <h3 style={{ fontSize: 'var(--fs-xl)', fontWeight: 750, marginTop: 2 }}>{payrun.name}</h3>
+              <h3 style={{ fontSize: 'var(--fs-xl)', fontWeight: 750, marginTop: 2 }}>
+                {payrun.name}
+              </h3>
               <div className="row gap2 wrap mt2">
                 <Chip tone={payrun.status === 'PAID' ? 'success' : 'info'} dot>
                   {payrun.status}
@@ -223,7 +244,9 @@ export function PayrollPage() {
           }
         >
           Every input for {monthLabel(payrun.periodStart)} is complete
-          {warnings.length > 0 && ` — ${warnings.length} non-blocking warning${warnings.length === 1 ? '' : 's'} remain`}.
+          {warnings.length > 0 &&
+            ` — ${warnings.length} non-blocking warning${warnings.length === 1 ? '' : 's'} remain`}
+          .
         </Banner>
       )}
 
@@ -235,7 +258,13 @@ export function PayrollPage() {
           icon={Users}
           sub={`${payrun.employeeIds.length} selected`}
         />
-        <Metric label="Gross" value={formatMoneyShort(totals.gross)} tone="brand" icon={Wallet} sub={formatMoney(totals.gross)} />
+        <Metric
+          label="Gross"
+          value={formatMoneyShort(totals.gross)}
+          tone="brand"
+          icon={Wallet}
+          sub={formatMoney(totals.gross)}
+        />
         <Metric
           label="Deductions"
           value={formatMoneyShort(totals.deductions)}
@@ -250,6 +279,35 @@ export function PayrollPage() {
           sub={formatMoney(totals.net)}
         />
       </div>
+
+      {receipt && (
+        <Card
+          title="Payroll decision receipt"
+          subtitle="Server-issued evidence for this payroll decision"
+          action={
+            <Chip tone={receipt.status === 'PAID' ? 'success' : 'info'} icon={FileCheck2}>
+              {receipt.status}
+            </Chip>
+          }
+          padding="tight"
+        >
+          <div className="grid grid-4">
+            <ReceiptValue label="Employees" value={String(receipt.employeeCount)} />
+            <ReceiptValue label="Approved net payroll" value={formatMoney(receipt.netTotal)} />
+            <ReceiptValue label="Readiness at approval" value={`${receipt.readinessScore}%`} />
+            <ReceiptValue
+              label="Evidence snapshot"
+              value={receipt.snapshotHash.slice(0, 12)}
+              mono
+            />
+          </div>
+          <p className="muted mt3" style={{ fontSize: 'var(--fs-xs)' }}>
+            Prepared {formatDateTime(receipt.preparedAt)} · validated by{' '}
+            {receipt.validatedByName ?? '—'}
+            {receipt.paidByName ? ` · paid by ${receipt.paidByName}` : ''}
+          </p>
+        </Card>
+      )}
 
       {/* 4 — supporting context */}
       <div className="grid split-side">
@@ -269,8 +327,8 @@ export function PayrollPage() {
             }))}
           />
           <p className="muted mt3" style={{ fontSize: 'var(--fs-xs)' }}>
-            Bars show the share of employees with clean inputs in each category. The ring above is the
-            readiness score: 100 minus the severity of every open blocking exception.
+            Bars show the share of employees with clean inputs in each category. The ring above is
+            the readiness score: 100 minus the severity of every open blocking exception.
           </p>
         </Card>
 
@@ -303,7 +361,13 @@ export function PayrollPage() {
         {can(role, 'payrun.compute') && (
           <Button
             icon={RefreshCw}
-            onClick={() => run('compute', computeActivePayrun)}
+            onClick={() =>
+              void runServer(
+                'compute',
+                () => computePayrun(payrun.id),
+                'Payroll computed from current server inputs',
+              )
+            }
             pending={busy === 'compute'}
             disabled={payrun.status === 'VALIDATED' || payrun.status === 'PAID'}
             title={
@@ -319,7 +383,9 @@ export function PayrollPage() {
         {can(role, 'payrun.freeze') && (
           <Button
             icon={payrun.isFrozen ? LockOpen : Lock}
-            onClick={() => run('freeze', () => setPayrunFrozen(!payrun.isFrozen, 'Operator unfroze the period'))}
+            onClick={() =>
+              run('freeze', () => setPayrunFrozen(!payrun.isFrozen, 'Operator unfroze the period'))
+            }
             pending={busy === 'freeze'}
           >
             {payrun.isFrozen ? 'Unfreeze inputs' : 'Freeze inputs'}
@@ -340,11 +406,12 @@ export function PayrollPage() {
           </Button>
         )}
 
-        {can(role, 'payslip.send') && (payrun.status === 'VALIDATED' || payrun.status === 'PAID') && (
-          <Button icon={Send} onClick={() => setConfirm('send')} pending={busy === 'send'}>
-            Send payslips
-          </Button>
-        )}
+        {can(role, 'payslip.send') &&
+          (payrun.status === 'VALIDATED' || payrun.status === 'PAID') && (
+            <Button icon={Send} onClick={() => setConfirm('send')} pending={busy === 'send'}>
+              Send payslips
+            </Button>
+          )}
 
         {can(role, 'payrun.validate') && payrun.status === 'COMPUTED' && (
           <Button
@@ -367,8 +434,8 @@ export function PayrollPage() {
 
       {!validate.ok && payrun.status === 'COMPUTED' && can(role, 'payrun.validate') && (
         <p className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
-          <TriangleAlert size={12} style={{ verticalAlign: -2 }} aria-hidden /> Validation is disabled:{' '}
-          {validate.reason}
+          <TriangleAlert size={12} style={{ verticalAlign: -2 }} aria-hidden /> Validation is
+          disabled: {validate.reason}
         </p>
       )}
 
@@ -384,7 +451,13 @@ export function PayrollPage() {
       <ConfirmDialog
         open={confirm === 'validate'}
         onClose={() => setConfirm(null)}
-        onConfirm={() => run('validate', validateActivePayrun)}
+        onConfirm={() =>
+          void runServer(
+            'validate',
+            () => validatePayrun(payrun.id),
+            'Payroll validated and evidence recorded',
+          )
+        }
         title={`Validate ${monthLabel(payrun.periodStart)} payroll`}
         confirmLabel="Validate payroll"
         variant="primary"
@@ -393,7 +466,11 @@ export function PayrollPage() {
         <ConsequencePreview
           rows={[
             { label: 'Payrun state', before: 'COMPUTED', after: 'VALIDATED' },
-            { label: 'Payslips locked', before: `${totals.count} editable`, after: `${totals.count} locked` },
+            {
+              label: 'Payslips locked',
+              before: `${totals.count} editable`,
+              after: `${totals.count} locked`,
+            },
             { label: 'Net payroll', before: '—', after: formatMoney(totals.net) },
           ]}
           note="Validation confirms the computed amounts are correct. Recomputing afterwards requires an explicit, audited reopen."
@@ -403,7 +480,9 @@ export function PayrollPage() {
       <ConfirmDialog
         open={confirm === 'pay'}
         onClose={() => setConfirm(null)}
-        onConfirm={() => run('pay', markActivePayrunPaid)}
+        onConfirm={() =>
+          void runServer('pay', () => markPayrunPaid(payrun.id), 'Payroll marked paid and frozen')
+        }
         title={`Mark ${monthLabel(payrun.periodStart)} payroll paid`}
         confirmLabel="Mark paid"
         variant="success"
@@ -431,7 +510,11 @@ export function PayrollPage() {
         <ConsequencePreview
           rows={[
             { label: 'Recipients', before: '—', after: `${totals.count} employees` },
-            { label: 'Payroll amounts', before: formatMoney(totals.net), after: formatMoney(totals.net) },
+            {
+              label: 'Payroll amounts',
+              before: formatMoney(totals.net),
+              after: formatMoney(totals.net),
+            },
           ]}
           note="Delivery runs independently of payroll. A failed email is recorded in the outbox and never changes a computed amount."
         />
@@ -476,5 +559,24 @@ export function PayrollPage() {
         </div>
       </Drawer>
     </Page>
+  );
+}
+
+function ReceiptValue({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="eyebrow">{label}</div>
+      <strong className={mono ? 'mono' : undefined} style={{ fontSize: 'var(--fs-sm)' }}>
+        {value}
+      </strong>
+    </div>
   );
 }

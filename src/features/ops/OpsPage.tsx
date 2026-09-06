@@ -19,11 +19,12 @@ import {
   HardDrive,
   Layers,
   RefreshCw,
+  ScanSearch,
   Server,
 } from 'lucide-react';
 import { Page } from '@/app/Page';
 import { useStore } from '@/store/store';
-import { fetchOpsMetrics, type OpsMetrics } from '@/lib/api';
+import { fetchOpsMetrics, runReadinessScan, type OpsMetrics, type ReadinessScan } from '@/lib/api';
 import { Banner, Button, Card, Chip, EmptyState, Metric } from '@/ui/primitives';
 import { HBars, LineChart } from '@/ui/charts';
 import { NodeGraph, type GraphSignal } from './NodeGraph';
@@ -37,6 +38,8 @@ export function OpsPage() {
   const [error, setError] = useState<string | null>(null);
   const [probeMs, setProbeMs] = useState(0);
   const [trend, setTrend] = useState<{ id: string; label: string; value: number }[]>([]);
+  const [scan, setScan] = useState<ReadinessScan | null>(null);
+  const [scanning, setScanning] = useState(false);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -136,6 +139,24 @@ export function OpsPage() {
           >
             Refresh
           </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={ScanSearch}
+            pending={scanning}
+            onClick={() => {
+              if (scanning) return;
+              setScanning(true);
+              void runReadinessScan()
+                .then(setScan)
+                .catch((err) =>
+                  setError(err instanceof Error ? err.message : 'Readiness scan failed'),
+                )
+                .finally(() => setScanning(false));
+            }}
+          >
+            Run readiness scan
+          </Button>
         </>
       }
     >
@@ -181,6 +202,41 @@ export function OpsPage() {
           sub={`${readsLastMinute.toLocaleString('en-IN')} in the last minute · ${recordsLoaded.toLocaleString('en-IN')} resident here (${coverage}% of the dataset)`}
         />
       </div>
+
+      <Card
+        title="Payroll preflight"
+        subtitle="An on-demand, server-side scan of the same inputs that guard payroll validation"
+        padding="tight"
+      >
+        {scan ? (
+          <div className="grid grid-4">
+            <Metric
+              label="Records scanned"
+              value={scan.totalRecords.toLocaleString('en-IN')}
+              icon={Database}
+            />
+            <Metric label="Payroll periods" value={scan.payrunsScanned} icon={Layers} />
+            <Metric
+              label="Open blockers"
+              value={scan.blockingExceptions}
+              tone={scan.blockingExceptions ? 'warning' : 'success'}
+              icon={CircleAlert}
+            />
+            <Metric
+              label="Measured duration"
+              value={`${scan.durationMs} ms`}
+              tone="success"
+              icon={Gauge}
+              sub={`${scan.employeesScanned.toLocaleString('en-IN')} employees evaluated`}
+            />
+          </div>
+        ) : (
+          <p className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
+            Run the scan to verify the complete persisted dataset before payroll approval. It
+            reports real record volume, active blockers, and elapsed server time.
+          </p>
+        )}
+      </Card>
 
       <Card
         title="Live system graph"

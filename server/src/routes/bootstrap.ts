@@ -152,6 +152,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
     leaveTypeCount,
     payrunCount,
     payrunMemberCount,
+    decisionReceiptCount,
     payslipCount,
     documentCount,
     auditCount,
@@ -174,6 +175,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
     prisma.leaveType.count(),
     prisma.payrun.count(),
     prisma.payrunEmployee.count(),
+    prisma.payrollDecisionReceipt.count(),
     prisma.payslip.count(),
     prisma.document.count(),
     prisma.auditEvent.count(),
@@ -226,6 +228,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
         leaveTypes: leaveTypeCount,
         payruns: payrunCount,
         payrunMemberships: payrunMemberCount,
+        payrollDecisionReceipts: decisionReceiptCount,
         payslips: payslipCount,
         documents: documentCount,
         auditEvents: auditCount,
@@ -249,6 +252,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
           leaveTypeCount +
           payrunCount +
           payrunMemberCount +
+          decisionReceiptCount +
           payslipCount +
           documentCount +
           auditCount +

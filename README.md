@@ -1,4 +1,4 @@
-![PeoplePay360 — know payroll is right before money moves](docs/assets/readme-hero.svg)
+![PeoplePay360 — know payroll is right before money moves](docs/assets/readme-hero.png)
 
 <p align="center">
   <strong>An explainable HR and payroll operating system built for confident payroll decisions.</strong><br />

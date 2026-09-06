@@ -11,7 +11,9 @@ import { requestId } from './middleware/request-id.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { authRouter } from './routes/auth.js';
+import { adminRouter } from './routes/admin.js';
 import { attendanceRouter } from './routes/attendance.js';
+import { changeRequestRouter } from './routes/change-requests.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
 import { contractRouter } from './routes/contracts.js';
 import { demoPaymentRouter } from './routes/demo-payments.js';
@@ -73,6 +75,8 @@ export function createApp() {
   app.use('/api', demoPaymentRouter);
   app.use('/api', outboxRouter);
   app.use('/api', documentRouter);
+  app.use('/api', changeRequestRouter);
+  app.use('/api', adminRouter);
   app.use('/api', opsRouter);
   app.use(errorHandler);
 

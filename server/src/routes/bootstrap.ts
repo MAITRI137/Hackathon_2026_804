@@ -1,8 +1,10 @@
 import { Router } from 'express';
 
 import { roleHasPermission } from '../core/rbac/matrix.js';
+import { DEMO_ORGANISATION_ID } from '../config/tenant.js';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { readSettings } from '../services/settings.js';
 
 export const bootstrapRouter = Router();
 
@@ -140,6 +142,86 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
       : prisma.auditEvent.findMany({ where: { id: '__none__' } }),
   ]);
 
+  // Platform records. Each is scoped by who the caller is rather than by which
+  // screen asked for it, so a client can never widen its own view by asking again.
+  const [
+    settings,
+    notifications,
+    checklists,
+    profileChangeRequests,
+    salaryChangeRequests,
+    outbox,
+    paymentBatches,
+    savedViews,
+    manageableUsers,
+  ] = await Promise.all([
+    readSettings(),
+    prisma.notification.findMany({
+      where: {
+        organisationId: DEMO_ORGANISATION_ID,
+        dismissedAt: null,
+        OR: [{ userId: user.id }, { role: user.role }],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.checklistInstance.findMany({
+      where: selfWhere,
+      include: { items: { orderBy: { sequence: 'asc' } } },
+      orderBy: { startedAt: 'desc' },
+      take: 200,
+    }),
+    prisma.profileChangeRequest.findMany({ where: selfWhere, orderBy: { createdAt: 'desc' }, take: 200 }),
+    // A pay proposal is payroll-confidential: HR without payroll access is not
+    // an audience for it, and an employee sees only their own.
+    canReadPayruns
+      ? prisma.salaryChangeRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
+      : prisma.salaryChangeRequest.findMany({
+          where: { employeeId: user.employeeId ?? '__none__' },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+        }),
+    roleHasPermission(user.role, 'payslip.send')
+      ? prisma.outboxMessage.findMany({
+          where: { organisationId: DEMO_ORGANISATION_ID },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        })
+      : Promise.resolve([]),
+    prisma.demoPaymentBatch.findMany({
+      where: {
+        organisationId: DEMO_ORGANISATION_ID,
+        ...(canReadAllPayslips ? {} : { items: { some: { employeeId: user.employeeId ?? '__none__' } } }),
+      },
+      include: {
+        items: canReadAllPayslips ? true : { where: { employeeId: user.employeeId ?? '__none__' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
+    prisma.savedView.findMany({
+      where: { organisationId: DEMO_ORGANISATION_ID, OR: [{ ownerId: user.id }, { isShared: true }] },
+      orderBy: { createdAt: 'desc' },
+    }),
+    // Only an administrator manages accounts, so only an administrator is sent
+    // the account list. Everyone else receives their own record and nothing more.
+    roleHasPermission(user.role, 'admin.users')
+      ? prisma.user.findMany({
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            employeeId: true,
+            displayName: true,
+            initials: true,
+            isActive: true,
+            lastLoginAt: true,
+          },
+          orderBy: [{ role: 'asc' }, { displayName: 'asc' }],
+        })
+      : Promise.resolve([]),
+  ]);
+
   // Totals and per-status counts are aggregated in SQL. A screen never loads a
   // collection in order to count or chart it.
   const [
@@ -213,7 +295,15 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
     decisionReceipts.length +
     payslips.length +
     documents.length +
-    audit.length;
+    audit.length +
+    notifications.length +
+    checklists.length +
+    profileChangeRequests.length +
+    salaryChangeRequests.length +
+    outbox.length +
+    paymentBatches.length +
+    savedViews.length +
+    manageableUsers.length;
 
   response.json({
     data: {
@@ -386,8 +476,9 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
         paidByName: item.paidByName,
         paidAt: isoInstant(item.paidAt),
       })),
-      payslips: payslips.map(({ lines, ...item }) => ({
+      payslips: payslips.map(({ lines, inputSnapshot, ...item }) => ({
         ...item,
+        input: inputSnapshot,
         periodStart: isoDate(item.periodStart),
         periodEnd: isoDate(item.periodEnd),
         workedDays: item.workedDays.toNumber(),
@@ -407,6 +498,105 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
         acknowledgedAt: isoInstant(item.acknowledgedAt),
       })),
       audit: audit.map((item) => ({ ...item, at: item.at.toISOString() })),
+      settings,
+      notifications: notifications.map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+        readAt: isoInstant(item.readAt),
+        dismissedAt: isoInstant(item.dismissedAt),
+      })),
+      checklists: checklists.map((instance) => ({
+        id: instance.id,
+        employeeId: instance.employeeId,
+        type: instance.kind,
+        createdAt: instance.startedAt.toISOString(),
+        items: instance.items.map((item) => ({
+          id: item.id,
+          label: item.label,
+          ownerRole: item.ownerRole,
+          dueDate: item.dueDate ? isoDate(item.dueDate) : '',
+          blocksPayroll: item.sequence < 3,
+          completedAt: isoInstant(item.completedAt),
+          completedById: item.completedById,
+        })),
+      })),
+      profileChangeRequests: profileChangeRequests.map((item) => ({
+        id: item.id,
+        employeeId: item.employeeId,
+        field: item.field,
+        currentValue: item.currentValue,
+        requestedValue: item.proposedValue,
+        status: item.status,
+        requestedAt: item.createdAt.toISOString(),
+        decidedById: item.decidedById,
+        decidedAt: isoInstant(item.decidedAt),
+        decisionNote: item.decisionNote,
+        version: item.version,
+      })),
+      salaryChangeRequests: salaryChangeRequests.map((item) => ({
+        id: item.id,
+        employeeId: item.employeeId,
+        contractId: item.contractId,
+        currentWage: item.currentWage.toFixed(2),
+        requestedWage: item.proposedWage.toFixed(2),
+        effectiveFrom: isoDate(item.effectiveFrom),
+        reason: item.reason,
+        status: item.status,
+        requestedById: item.requestedById,
+        decidedById: item.decidedById,
+        decidedAt: isoInstant(item.decidedAt),
+        createdAt: item.createdAt.toISOString(),
+        version: item.version,
+      })),
+      outbox: outbox.map((item) => ({
+        id: item.id,
+        to: item.recipientEmail,
+        subject: item.subject,
+        body: item.template,
+        attachmentName: item.payslipId ? item.payslipId + '.pdf' : null,
+        status: item.status,
+        error: item.failureReason,
+        createdAt: item.createdAt.toISOString(),
+        sentAt: isoInstant(item.lastAttemptAt),
+        payslipId: item.payslipId,
+        attempts: item.attempts,
+        simulated: true,
+      })),
+      demoPayments: paymentBatches.map((batch) => ({
+        id: batch.id,
+        payrunId: batch.payrunId,
+        reference: batch.reference,
+        status: batch.status,
+        totalAmount: batch.totalAmount.toFixed(2),
+        itemCount: batch.itemCount,
+        successCount: batch.successCount,
+        failureCount: batch.failureCount,
+        createdByName: batch.createdByName,
+        createdAt: batch.createdAt.toISOString(),
+        simulated: true,
+        items: batch.items.map((item) => ({
+          id: item.id,
+          payslipId: item.payslipId,
+          employeeId: item.employeeId,
+          amount: item.amount.toFixed(2),
+          accountMasked: item.accountMasked,
+          status: item.status,
+          failureReason: item.failureReason,
+          retryCount: item.retryCount,
+        })),
+      })),
+      savedViews: savedViews.map((item) => ({
+        id: item.id,
+        ownerId: item.ownerId,
+        module: item.view,
+        name: item.name,
+        filters: item.config,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      manageableUsers: manageableUsers.map((item) => ({
+        ...item,
+        lastLoginAt: isoInstant(item.lastLoginAt),
+      })),
     },
   });
 });

@@ -397,9 +397,35 @@ model Payrun {
   createdBy         User             @relation(fields: [createdById], references: [id])
   employees         PayrunEmployee[]
   payslips          Payslip[]
+  decisionReceipt   PayrollDecisionReceipt?
 
   @@unique([periodStart, salaryStructureId])
   @@index([status, periodStart])
+}
+
+/// Immutable evidence for the approval and payment decision. It is created at
+/// validation, then extended at payment; the source data remains in its own
+/// normalized tables and this record preserves what was approved at that time.
+model PayrollDecisionReceipt {
+  id                     String   @id @default(cuid())
+  payrunId               String   @unique
+  snapshotHash           String
+  readinessScore         Int
+  blockingExceptionCount Int
+  employeeCount          Int
+  netTotal               Decimal  @db.Decimal(18, 2)
+  preparedById           String
+  preparedByName         String
+  preparedAt             DateTime @db.Timestamptz(3)
+  validatedById          String?
+  validatedByName        String?
+  validatedAt            DateTime? @db.Timestamptz(3)
+  paidById               String?
+  paidByName             String?
+  paidAt                 DateTime? @db.Timestamptz(3)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+  payrun                 Payrun   @relation(fields: [payrunId], references: [id], onDelete: Cascade)
 }
 
 model PayrunEmployee {

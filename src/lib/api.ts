@@ -48,6 +48,26 @@ export interface OpsMetrics {
   routes: { route: string; count: number; errors: number; averageMs: number; maxMs: number }[];
 }
 
+export interface PayrollDecisionCommand {
+  payrunId: string;
+  status: 'DRAFT' | 'COMPUTED' | 'VALIDATED' | 'PAID';
+  snapshotHash: string;
+  readinessScore: number;
+  blockingExceptionCount: number;
+  employeeCount: number;
+  netTotal: string;
+}
+
+export interface ReadinessScan {
+  totalRecords: number;
+  payrunsScanned: number;
+  employeesScanned: number;
+  readyPayruns: number;
+  blockingExceptions: number;
+  durationMs: number;
+  scannedAt: string;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -94,6 +114,11 @@ export async function restoreSession(): Promise<BootstrapPayload> {
   return api<BootstrapPayload>('/bootstrap');
 }
 
+/** Fetch a fresh server-authorised snapshot after a state-changing command. */
+export function refreshBootstrap(): Promise<BootstrapPayload> {
+  return api<BootstrapPayload>('/bootstrap');
+}
+
 export async function connectDemoRole(role: Role): Promise<BootstrapPayload> {
   await api('/auth/login', {
     method: 'POST',
@@ -104,6 +129,42 @@ export async function connectDemoRole(role: Role): Promise<BootstrapPayload> {
 
 export function fetchOpsMetrics(): Promise<OpsMetrics> {
   return api<OpsMetrics>('/ops/metrics');
+}
+
+export function computePayrun(payrunId: string): Promise<PayrollDecisionCommand> {
+  return api<PayrollDecisionCommand>(`/payruns/${payrunId}/compute`, { method: 'POST' });
+}
+
+export function validatePayrun(payrunId: string): Promise<{ receipt: AppState['decisionReceipts'][number] }> {
+  return api(`/payruns/${payrunId}/validate`, { method: 'POST' });
+}
+
+export function markPayrunPaid(payrunId: string): Promise<{ receipt: AppState['decisionReceipts'][number] }> {
+  return api(`/payruns/${payrunId}/mark-paid`, { method: 'POST' });
+}
+
+export function resolvePayrunBank(
+  payrunId: string,
+  input: { employeeId: string; accountName: string; accountNumber: string; ifsc: string; bankName: string },
+): Promise<{ payrunId: string; employeeId: string; resolved: string }> {
+  return api(`/payruns/${payrunId}/blockers/bank/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function resolvePayrunAttendance(
+  payrunId: string,
+  input: { attendanceId: string; checkOut: string; reason: string },
+): Promise<{ payrunId: string; attendanceId: string; resolved: string }> {
+  return api(`/payruns/${payrunId}/blockers/attendance/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function runReadinessScan(): Promise<ReadinessScan> {
+  return api<ReadinessScan>('/ops/readiness-scan', { method: 'POST' });
 }
 
 export function signOut() {

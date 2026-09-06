@@ -46,6 +46,7 @@ export function hydrateFromServer(payload: BootstrapPayload): void {
       'attendance',
       'leaveAllocations',
       'leaveRequests',
+      'decisionReceipts',
       'payslips',
       'documents',
       'audit',

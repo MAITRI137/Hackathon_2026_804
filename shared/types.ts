@@ -332,6 +332,26 @@ export interface Payrun {
   version: number;
 }
 
+/** Immutable evidence captured when a payroll run is authorised for payment. */
+export interface PayrollDecisionReceipt {
+  payrunId: string;
+  status: 'VALIDATED' | 'PAID';
+  snapshotHash: string;
+  readinessScore: number;
+  blockingExceptionCount: number;
+  employeeCount: number;
+  netTotal: MoneyString;
+  preparedById: string;
+  preparedByName: string;
+  preparedAt: string;
+  validatedById: string | null;
+  validatedByName: string | null;
+  validatedAt: string | null;
+  paidById: string | null;
+  paidByName: string | null;
+  paidAt: string | null;
+}
+
 export interface SourceRef {
   type: 'CONTRACT' | 'RULE' | 'LEAVE' | 'ATTENDANCE' | 'SCHEDULE' | 'STRUCTURE' | 'CONSTANT';
   id: string;

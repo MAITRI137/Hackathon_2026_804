@@ -20,6 +20,7 @@ import type {
   LeaveType,
   OutboxMessage,
   Payrun,
+  PayrollDecisionReceipt,
   Payslip,
   ProfileChangeRequest,
   Role,
@@ -50,6 +51,7 @@ export interface AppState {
   leaveAllocations: LeaveAllocation[];
   leaveRequests: LeaveRequest[];
   payruns: Payrun[];
+  decisionReceipts: PayrollDecisionReceipt[];
   payslips: Payslip[];
   documents: EmployeeDocument[];
   checklists: ChecklistInstance[];
@@ -104,6 +106,7 @@ export function createInitialState(): AppState {
     leaveAllocations: structuredClone(seed.leaveAllocations),
     leaveRequests: structuredClone(seed.leaveRequests),
     payruns: structuredClone(seed.payruns),
+    decisionReceipts: [],
     payslips: [],
     documents: structuredClone(seed.documents),
     checklists: structuredClone(seed.checklists),

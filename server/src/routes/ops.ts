@@ -3,8 +3,62 @@ import { Router } from 'express';
 import { metrics } from '../core/metrics.js';
 import { prisma } from '../db/prisma.js';
 import { requirePermission } from '../middleware/auth.js';
+import { evaluatePayrun } from '../services/payrun-decision.js';
 
 export const opsRouter = Router();
+
+/**
+ * A deliberate, operator-triggered payroll preflight. Unlike the background
+ * telemetry poll, this runs the same server-side readiness evaluation that
+ * guards validation and reports its measured duration.
+ */
+opsRouter.post('/ops/readiness-scan', requirePermission('ops.dashboard'), async (_request, response) => {
+  const startedAt = process.hrtime.bigint();
+  const [payruns, employees, totalRecords] = await prisma.$transaction([
+    prisma.payrun.findMany({ select: { id: true } }),
+    prisma.employee.count(),
+    prisma.$queryRaw<[{ total: bigint }]>`
+      SELECT
+        (SELECT COUNT(*) FROM "User") +
+        (SELECT COUNT(*) FROM "Department") +
+        (SELECT COUNT(*) FROM "JobPosition") +
+        (SELECT COUNT(*) FROM "WorkingSchedule") +
+        (SELECT COUNT(*) FROM "ScheduleLine") +
+        (SELECT COUNT(*) FROM "Holiday") +
+        (SELECT COUNT(*) FROM "Employee") +
+        (SELECT COUNT(*) FROM "EmployeeBankDetail") +
+        (SELECT COUNT(*) FROM "Contract") +
+        (SELECT COUNT(*) FROM "Attendance") +
+        (SELECT COUNT(*) FROM "LeaveType") +
+        (SELECT COUNT(*) FROM "LeaveAllocation") +
+        (SELECT COUNT(*) FROM "LeaveRequest") +
+        (SELECT COUNT(*) FROM "SalaryStructure") +
+        (SELECT COUNT(*) FROM "SalaryRule") +
+        (SELECT COUNT(*) FROM "Payrun") +
+        (SELECT COUNT(*) FROM "PayrunEmployee") +
+        (SELECT COUNT(*) FROM "Payslip") +
+        (SELECT COUNT(*) FROM "Document") +
+        (SELECT COUNT(*) FROM "AuditEvent") AS total
+    `,
+  ]);
+  const evaluations = await prisma.$transaction((tx) =>
+    Promise.all(payruns.map((payrun) => evaluatePayrun(tx, payrun.id))),
+  );
+  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+  metrics.recordQuery(durationMs);
+  response.locals.recordsRead = employees + payruns.length;
+  response.json({
+    data: {
+      totalRecords: Number(totalRecords[0]?.total ?? 0),
+      payrunsScanned: evaluations.length,
+      employeesScanned: employees,
+      readyPayruns: evaluations.filter((evaluation) => evaluation.issues.length === 0).length,
+      blockingExceptions: evaluations.reduce((sum, evaluation) => sum + evaluation.issues.length, 0),
+      durationMs: Number(durationMs.toFixed(1)),
+      scannedAt: new Date().toISOString(),
+    },
+  });
+});
 
 /**
  * Live operations telemetry for the administration console.

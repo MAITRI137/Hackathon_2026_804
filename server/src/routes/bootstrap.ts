@@ -62,6 +62,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
     salaryStructures,
     salaryRules,
     payruns,
+    decisionReceipts,
     payslips,
     documents,
     audit,
@@ -117,6 +118,10 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
         employees: canReadPayruns ? true : { where: { employeeId: user.employeeId ?? '__none__' } },
       },
       orderBy: { periodStart: 'asc' },
+    }),
+    prisma.payrollDecisionReceipt.findMany({
+      where: canReadPayruns ? {} : { payrunId: '__none__' },
+      orderBy: { preparedAt: 'desc' },
     }),
     prisma.payslip.findMany({
       where: canReadAllPayslips ? {} : { employeeId: user.employeeId ?? '__none__' },
@@ -203,6 +208,7 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
     salaryStructures.length +
     salaryRules.length +
     payruns.length +
+    decisionReceipts.length +
     payslips.length +
     documents.length +
     audit.length;
@@ -358,6 +364,24 @@ bootstrapRouter.get('/bootstrap', requireAuth, async (request, response) => {
             .map((entry) => entry.employeeId),
         };
       }),
+      decisionReceipts: decisionReceipts.map((item) => ({
+        payrunId: item.payrunId,
+        status: item.paidAt ? 'PAID' : 'VALIDATED',
+        snapshotHash: item.snapshotHash,
+        readinessScore: item.readinessScore,
+        blockingExceptionCount: item.blockingExceptionCount,
+        employeeCount: item.employeeCount,
+        netTotal: item.netTotal.toFixed(2),
+        preparedById: item.preparedById,
+        preparedByName: item.preparedByName,
+        preparedAt: item.preparedAt.toISOString(),
+        validatedById: item.validatedById,
+        validatedByName: item.validatedByName,
+        validatedAt: isoInstant(item.validatedAt),
+        paidById: item.paidById,
+        paidByName: item.paidByName,
+        paidAt: isoInstant(item.paidAt),
+      })),
       payslips: payslips.map(({ lines, ...item }) => ({
         ...item,
         periodStart: isoDate(item.periodStart),

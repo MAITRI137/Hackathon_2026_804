@@ -14,6 +14,7 @@ import { authRouter } from './routes/auth.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
 import { healthRouter } from './routes/health.js';
 import { opsRouter } from './routes/ops.js';
+import { payrunRouter } from './routes/payruns.js';
 
 const PostgresSessionStore = connectPgSimple(session);
 
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/api', healthRouter);
   app.use('/api', authRouter);
   app.use('/api', bootstrapRouter);
+  app.use('/api', payrunRouter);
   app.use('/api', opsRouter);
   app.use(errorHandler);
 

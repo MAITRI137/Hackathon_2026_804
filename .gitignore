@@ -29,6 +29,8 @@ docs/*
 !docs/plan/**
 !docs/references/
 !docs/references/**
+!docs/assets/
+!docs/assets/**
 AGENTS.md
 SKILL.md
 walkthrough.md

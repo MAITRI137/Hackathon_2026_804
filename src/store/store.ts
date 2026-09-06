@@ -1,12 +1,15 @@
 /**
- * A tiny observable store over one immutable-by-convention state object.
+ * A tiny observable cache over one immutable-by-convention snapshot.
  *
  * Components subscribe with `useStore(selector)` and re-render only when the
- * selected slice changes — no global re-render on every mutation.
+ * selected slice changes. Nothing writes business data into this store except
+ * `hydrateFromServer`, which replaces it wholesale with what the server just
+ * said — so there is no path by which the browser can believe something the
+ * database does not.
  */
 import { useSyncExternalStore } from 'react';
 import type { BootstrapPayload } from '@/lib/api';
-import { createInitialState, type AppState } from './state';
+import { createInitialState, DEFAULT_SETTINGS, type AppState } from './state';
 
 type Listener = () => void;
 
@@ -30,57 +33,66 @@ export function resetState(): void {
   for (const l of listeners) l();
 }
 
-/** Replace local demo records with the server-authorized snapshot in one render. */
+/** Every collection the server owns. Anything not listed here is view state. */
+const SERVER_COLLECTIONS = [
+  'departments',
+  'jobPositions',
+  'schedules',
+  'holidays',
+  'leaveTypes',
+  'salaryStructures',
+  'salaryRules',
+  'employees',
+  'contracts',
+  'attendance',
+  'leaveAllocations',
+  'leaveRequests',
+  'decisionReceipts',
+  'payslips',
+  'documents',
+  'checklists',
+  'profileChangeRequests',
+  'salaryChangeRequests',
+  'outbox',
+  'audit',
+  'savedViews',
+] as const;
+
+/**
+ * Replace this browser's view of the world with the server snapshot.
+ *
+ * Called after sign-in, after every command, on window focus, on reconnect and
+ * on every realtime event. A collection the caller is not entitled to arrives
+ * empty, and it is emptied here too — a role switch must never leave the
+ * previous role's rows on screen.
+ */
 export function hydrateFromServer(payload: BootstrapPayload): void {
   setState((draft) => {
     const user = payload.session.user;
-    const priorPayrun = draft.payruns.find((item) => item.id === draft.activePayrunId);
-    const recordKeys = [
-      'departments',
-      'jobPositions',
-      'schedules',
-      'holidays',
-      'leaveTypes',
-      'employees',
-      'contracts',
-      'attendance',
-      'leaveAllocations',
-      'leaveRequests',
-      'decisionReceipts',
-      'payslips',
-      'documents',
-      'audit',
-    ] as const;
 
-    for (const key of recordKeys) {
-      const value = payload[key];
-      if (value) draft[key] = value as never;
+    for (const key of SERVER_COLLECTIONS) {
+      draft[key] = (payload[key] ?? []) as never;
     }
 
-    draft.users = [user];
+    // An administrator manages accounts, so they receive the account list;
+    // everybody else receives only themselves, and the store says so.
+    draft.users = payload.manageableUsers?.length ? payload.manageableUsers : [user];
     draft.currentUserId = user.id;
+    draft.settings = payload.settings ?? { ...DEFAULT_SETTINGS };
+    draft.storedNotifications = (payload.notifications ?? []) as never;
+    draft.demoPayments = (payload.demoPayments ?? []) as never;
     draft.counts = payload.counts ?? null;
     draft.attendanceSummary = payload.attendanceSummary ?? null;
+    draft.payruns = payload.payruns ?? [];
 
-    if (payload.payruns?.length) {
-      draft.payruns = payload.payruns;
-      draft.activePayrunId = payload.payruns.at(-1)!.id;
-    } else if (priorPayrun) {
-      draft.payruns = [
-        {
-          ...priorPayrun,
-          status: 'DRAFT',
-          isFrozen: false,
-          frozenAt: null,
-          computedAt: null,
-          validatedAt: null,
-          paidAt: null,
-          inputSnapshotHash: null,
-          employeeIds: user.employeeId ? [user.employeeId] : [],
-        },
-      ];
-      draft.activePayrunId = priorPayrun.id;
-    }
+    // Keep looking at the same period across a refresh; fall back to the most
+    // recent one the caller can see.
+    const stillVisible = draft.payruns.some((payrun) => payrun.id === draft.activePayrunId);
+    if (!stillVisible) draft.activePayrunId = draft.payruns.at(-1)?.id ?? '';
+
+    // "Today" is the server's day, not the browser's clock and never a seeded
+    // constant: attendance, leave and payroll all measure against it.
+    draft.today = new Date().toISOString().slice(0, 10);
   });
 }
 
@@ -100,10 +112,4 @@ export function useStore<T = AppState>(selector?: (s: AppState) => T): T | AppSt
     () => select(state),
     () => select(state),
   );
-}
-
-/** Stable id generator — deterministic within a session, no Math.random. */
-export function nextId(prefix: string): string {
-  state.seq += 1;
-  return `${prefix}-${state.seq}`;
 }

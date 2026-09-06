@@ -1,8 +1,10 @@
 /**
- * Application state shape.
+ * The shape of what this browser currently knows.
  *
- * One coherent store. Every screen derives from this — there is no second
- * copy of any business value anywhere in the app.
+ * This is a cache of the server snapshot, not a second database. It starts
+ * empty, it is filled by `/api/bootstrap`, and it is replaced — never patched
+ * optimistically — after every command and every live event. The only fields
+ * the browser owns are the ones marked as view state below.
  */
 import type {
   AppSettings,
@@ -31,7 +33,44 @@ import type {
   User,
   WorkingSchedule,
 } from '@shared/types';
-import * as seed from '@/data/seed';
+
+/** A simulated payout batch, exactly as the server stored it. */
+export interface DemoPaymentBatchView {
+  id: string;
+  payrunId: string;
+  reference: string;
+  status: 'QUEUED' | 'SIMULATED_SUCCESS' | 'SIMULATED_FAILURE';
+  totalAmount: string;
+  itemCount: number;
+  successCount: number;
+  failureCount: number;
+  createdByName: string;
+  createdAt: string;
+  simulated: true;
+  items: {
+    id: string;
+    payslipId: string;
+    employeeId: string;
+    amount: string;
+    accountMasked: string;
+    status: 'QUEUED' | 'SIMULATED_SUCCESS' | 'SIMULATED_FAILURE';
+    failureReason: string | null;
+    retryCount: number;
+  }[];
+}
+
+/** A notification the server persisted because another user's action caused it. */
+export interface StoredNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  entityType: string | null;
+  entityId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
 
 export interface AppState {
   /* reference data */
@@ -58,13 +97,13 @@ export interface AppState {
   profileChangeRequests: ProfileChangeRequest[];
   salaryChangeRequests: SalaryChangeRequest[];
   outbox: OutboxMessage[];
+  demoPayments: DemoPaymentBatchView[];
   audit: AuditEvent[];
   savedViews: SavedView[];
 
   /* platform */
   settings: AppSettings;
-  readNotificationIds: string[];
-  dismissedNotificationIds: string[];
+  storedNotifications: StoredNotification[];
 
   /** Real dataset totals from the server. Screens show these rather than
    *  counting a collection the browser happens to hold. */
@@ -74,11 +113,82 @@ export interface AppState {
 
   /* session */
   currentUserId: string;
-  activePayrunId: string;
   today: string;
 
-  /* counters for deterministic ids */
+  /* ── view state: the only fields this browser owns ── */
+
+  /** Which period the payroll screens are looking at. */
+  activePayrunId: string;
+  /** Derived alerts the signed-in person has read or dismissed in this tab.
+   *  Persisted notifications carry their own server-side read state; these
+   *  ids only cover alerts computed from data, which have nothing to store. */
+  readNotificationIds: string[];
+  dismissedNotificationIds: string[];
+  /** Bumped on every store write so `useSyncExternalStore` sees a new value. */
   seq: number;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  autoFreezeAtCutoff: false,
+  requireReopenReason: true,
+  varianceThresholdPercent: 25,
+  autoApproveShortSickLeave: false,
+  lateGraceMinutes: 15,
+  excessiveHoursPerDay: 11,
+  inputCutoffDay: 25,
+  payDay: 30,
+};
+
+/**
+ * An empty store.
+ *
+ * Nothing is rendered from this: the application shows the sign-in screen until
+ * `/api/bootstrap` has answered. Seeding the browser with demo records would
+ * make an unauthenticated tab look like a working product, which is exactly the
+ * illusion this rewrite exists to remove.
+ */
+export function createInitialState(): AppState {
+  return {
+    departments: [],
+    jobPositions: [],
+    schedules: [],
+    holidays: [],
+    leaveTypes: [],
+    salaryStructures: [],
+    salaryRules: [],
+
+    users: [],
+    employees: [],
+    contracts: [],
+    attendance: [],
+    leaveAllocations: [],
+    leaveRequests: [],
+    payruns: [],
+    decisionReceipts: [],
+    payslips: [],
+    documents: [],
+    checklists: [],
+    profileChangeRequests: [],
+    salaryChangeRequests: [],
+    outbox: [],
+    demoPayments: [],
+    audit: [],
+    savedViews: [],
+
+    settings: { ...DEFAULT_SETTINGS },
+    storedNotifications: [],
+
+    counts: null,
+    attendanceSummary: null,
+
+    currentUserId: '',
+    today: new Date().toISOString().slice(0, 10),
+
+    activePayrunId: '',
+    readNotificationIds: [],
+    dismissedNotificationIds: [],
+    seq: 0,
+  };
 }
 
 export const ROLE_TO_USER: Record<Role, string> = {
@@ -88,45 +198,3 @@ export const ROLE_TO_USER: Record<Role, string> = {
   HR_PAYROLL_MANAGER: 'usr-pm',
   ADMIN: 'usr-admin',
 };
-
-export function createInitialState(): AppState {
-  return {
-    departments: structuredClone(seed.departments),
-    jobPositions: structuredClone(seed.jobPositions),
-    schedules: structuredClone(seed.schedules),
-    holidays: structuredClone(seed.holidays),
-    leaveTypes: structuredClone(seed.leaveTypes),
-    salaryStructures: structuredClone(seed.salaryStructures),
-    salaryRules: structuredClone(seed.salaryRules),
-
-    users: structuredClone(seed.users),
-    employees: structuredClone(seed.employees),
-    contracts: structuredClone(seed.contracts),
-    attendance: structuredClone(seed.attendance),
-    leaveAllocations: structuredClone(seed.leaveAllocations),
-    leaveRequests: structuredClone(seed.leaveRequests),
-    payruns: structuredClone(seed.payruns),
-    decisionReceipts: [],
-    payslips: [],
-    documents: structuredClone(seed.documents),
-    checklists: structuredClone(seed.checklists),
-    profileChangeRequests: structuredClone(seed.profileChangeRequests),
-    salaryChangeRequests: structuredClone(seed.salaryChangeRequests),
-    outbox: [],
-    audit: structuredClone(seed.auditSeed),
-    savedViews: [],
-
-    settings: { ...seed.settingsSeed },
-    readNotificationIds: [],
-    dismissedNotificationIds: [],
-
-    counts: null,
-    attendanceSummary: null,
-
-    currentUserId: 'usr-pm',
-    activePayrunId: seed.ACTIVE_PAYRUN_ID,
-    today: seed.TODAY,
-
-    seq: 1000,
-  };
-}

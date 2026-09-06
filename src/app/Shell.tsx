@@ -26,7 +26,6 @@ import {
 } from '@/store/selectors';
 import { markNotificationsRead } from '@/store/actions';
 import { connectDemoRole, signOut } from '@/lib/api';
-import { bootstrapPayroll } from '@/store/actions';
 import { hydrateFromServer } from '@/store/store';
 import { Avatar, Button } from '@/ui/primitives';
 import { SidecarHost, useLayer } from '@/ui/overlays';
@@ -95,8 +94,7 @@ export function Shell() {
         hydrateFromServer(payload);
         // Every role computes payroll for what it is allowed to see: an
         // employee gets their own payslip, a payroll role gets the whole run.
-        bootstrapPayroll();
-        setRoleMenu(false);
+          setRoleMenu(false);
         navigate('/');
         toast.show(`Now securely signed in as ${ROLE_LABEL[next]}`, 'success');
       } catch (error) {

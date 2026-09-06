@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { OverlayProvider, SidecarProvider } from '@/ui/overlays';
 import { ToastProvider, useToast } from '@/ui/toast';
-import { bootstrapPayroll, computeActivePayrun } from '@/store/actions';
-import { restoreSession, type BootstrapPayload } from '@/lib/api';
+import { ApiError } from '@/lib/api';
+import { computeActivePayrun } from '@/store/actions';
+import { refreshBootstrap, restoreSession, type BootstrapPayload } from '@/lib/api';
 import { hydrateFromServer } from '@/store/store';
 import { AppActionsProvider, useAppActions } from './actions-context';
 import { Shell } from './Shell';
@@ -175,12 +176,80 @@ const router = createHashRouter([
   },
 ]);
 
+/**
+ * Keeps this browser in step with everyone else.
+ *
+ * The server publishes only change metadata over server-sent events — a type,
+ * an entity id, the employees it touched. It never publishes salary, bank or
+ * document content, because a subscriber list is a poor place to enforce
+ * permissions. On an event this client refetches its own scoped snapshot, so
+ * what it ends up showing is exactly what it is allowed to see.
+ *
+ * A refetch also runs on window focus and on reconnect: if the stream drops,
+ * a missed message must not leave stale numbers on screen. And an update
+ * caused by someone else says so, quietly, rather than silently changing the
+ * figures a person is looking at.
+ */
+function LiveSync({ onSessionLost }: { onSessionLost: () => void }) {
+  const toast = useToast();
+
+  useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    let queued = false;
+
+    const pull = (announce: boolean) => {
+      if (inFlight) {
+        queued = queued || announce;
+        return;
+      }
+      inFlight = true;
+      void refreshBootstrap()
+        .then((payload) => {
+          if (!active) return;
+          hydrateFromServer(payload);
+          if (announce) toast.show('Updated just now — another user changed this data.', 'info');
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          // Only a lost session sends the person back to sign-in; a transient
+          // network failure leaves the last known snapshot on screen.
+          if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+            onSessionLost();
+          }
+        })
+        .finally(() => {
+          inFlight = false;
+          if (queued) {
+            queued = false;
+            pull(true);
+          }
+        });
+    };
+
+    const onDomainEvent = () => pull(true);
+    const onRefocus = () => pull(false);
+
+    const events = new EventSource('/api/events');
+    events.addEventListener('domain', onDomainEvent);
+    window.addEventListener('focus', onRefocus);
+    window.addEventListener('online', onRefocus);
+    return () => {
+      active = false;
+      events.close();
+      window.removeEventListener('focus', onRefocus);
+      window.removeEventListener('online', onRefocus);
+    };
+  }, [toast, onSessionLost]);
+
+  return null;
+}
+
 export function App() {
   const [phase, setPhase] = useState<'checking' | 'signed-out' | 'ready'>('checking');
 
   const enter = useCallback((payload: BootstrapPayload) => {
     hydrateFromServer(payload);
-    bootstrapPayroll();
     setPhase('ready');
   }, []);
 
@@ -199,39 +268,6 @@ export function App() {
       active = false;
     };
   }, [enter]);
-
-  // SSE events carry only safe change metadata. Every client rehydrates its
-  // own RBAC-scoped server snapshot, so another user's action is visible
-  // without making browser state a second business database.
-  useEffect(() => {
-    if (phase !== 'ready') return;
-    let active = true;
-    let refreshing = false;
-    const refresh = () => {
-      if (refreshing) return;
-      refreshing = true;
-      void restoreSession()
-        .then((payload) => {
-          if (active) hydrateFromServer(payload);
-        })
-        .catch(() => {
-          if (active) setPhase('signed-out');
-        })
-        .finally(() => {
-          refreshing = false;
-        });
-    };
-    const events = new EventSource('/api/events');
-    events.addEventListener('domain', refresh);
-    window.addEventListener('focus', refresh);
-    window.addEventListener('online', refresh);
-    return () => {
-      active = false;
-      events.close();
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('online', refresh);
-    };
-  }, [phase]);
 
   if (phase === 'checking') {
     return (
@@ -252,6 +288,7 @@ export function App() {
     <OverlayProvider>
       <ToastProvider>
         <SidecarProvider>
+          <LiveSync onSessionLost={() => setPhase('signed-out')} />
           <RouterProvider router={router} />
         </SidecarProvider>
       </ToastProvider>

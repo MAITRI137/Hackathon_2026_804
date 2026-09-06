@@ -21,7 +21,7 @@ export function UsersPage() {
   const [active, setActive] = useState(true);
   const rows = state.users.filter((u) => `${u.displayName} ${u.email} ${ROLE_LABEL[u.role]}`.toLowerCase().includes(query.toLowerCase()));
   const open = (user: User) => { setEditing(user); setRole(user.role); setActive(user.isActive); };
-  const save = () => { if (!editing) return; const result = updateUser(editing.id, { role, isActive: active }); toast.result(result); if (result.ok) setEditing(null); };
+  const save = async () => { if (!editing) return; const result = await updateUser(editing.id, { role, isActive: active }); toast.result(result); if (result.ok) setEditing(null); };
   const columns: Column<User>[] = [
     { key: 'name', header: 'User', render: (u) => <span className="row"><Avatar initials={u.initials} /><span><strong>{u.displayName}</strong><span className="muted" style={{ display: 'block' }}>{u.email}</span></span></span>, sortValue: (u) => u.displayName },
     { key: 'role', header: 'Role', render: (u) => <Chip tone="info">{ROLE_LABEL[u.role]}</Chip> },

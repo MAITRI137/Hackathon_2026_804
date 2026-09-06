@@ -289,17 +289,6 @@ export function computePayrun(state: AppState, payrun: Payrun, at: string): Comp
   return { payslips, failures };
 }
 
-/** The seeded duplicate: a second payslip row for one employee in one period. */
-export function makeDuplicate(original: Payslip): Payslip {
-  return {
-    ...original,
-    id: `${original.id}-dup`,
-    payslipRef: `${original.payslipRef}-D`,
-    isDuplicate: true,
-    computedAt: original.computedAt,
-  };
-}
-
 /* ── exceptions ────────────────────────────────────────────── */
 
 const CATEGORY_LABEL: Record<ExceptionCategory, string> = {
@@ -423,27 +412,8 @@ export function computeExceptions(state: AppState, payrun: Payrun): PayrollExcep
     }
   }
 
-  /* duplicate payslips */
-  const seen = new Map<string, number>();
-  for (const s of slips) {
-    seen.set(s.employeeId, (seen.get(s.employeeId) ?? 0) + 1);
-  }
-  for (const [employeeId, count] of seen) {
-    if (count > 1) {
-      out.push({
-        id: `exc-dup-${employeeId}`,
-        kind: 'DUPLICATE_PAYSLIP',
-        category: 'PAYSLIP',
-        severity: 4,
-        blocking: true,
-        employeeId,
-        title: 'Duplicate payslip',
-        detail: `${count} payslips exist for this employee in ${monthLabel(payrun.periodStart)}.`,
-        resolution: 'REMOVE_DUPLICATE',
-        refId: slips.find((s) => s.employeeId === employeeId && s.isDuplicate)?.id ?? null,
-      });
-    }
-  }
+  /* A duplicate payslip is impossible: the database holds a unique index on
+     (payrunId, employeeId), so there is no exception to raise for it. */
 
   /* negative net */
   for (const s of slips) {

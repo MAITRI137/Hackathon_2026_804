@@ -24,7 +24,7 @@ import {
 import { can } from '@shared/permissions';
 import { formatMoney, formatMoneyShort } from '@shared/money';
 import { formatDate, formatDateTime, monthLabel } from '@shared/dates';
-import { hydrateFromServer, useStore } from '@/store/store';
+import { useStore } from '@/store/store';
 import {
   activePayrun,
   canValidate,
@@ -36,14 +36,17 @@ import {
 } from '@/store/selectors';
 import { netLabel } from '@/store/payroll';
 import {
-  bootstrapPayroll,
+  computeActivePayrun,
   createPayrunFromPrevious,
+  markActivePayrunPaid,
   reopenPayrun,
   sendPayslips,
   setActivePayrun,
   setPayrunFrozen,
+  validateActivePayrun,
+  type ActionResult,
 } from '@/store/actions';
-import { computePayrun, markPayrunPaid, refreshBootstrap, validatePayrun } from '@/lib/api';
+
 import { Page } from '@/app/Page';
 import { Banner, Button, Card, Chip, Metric } from '@/ui/primitives';
 import { Select, TextArea } from '@/ui/form';
@@ -86,31 +89,20 @@ export function PayrollPage() {
   const blocking = exceptions.filter((e) => e.blocking);
   const warnings = exceptions.filter((e) => !e.blocking);
 
-  const run = (key: string, fn: () => { ok: boolean; message?: string; error?: string }) => {
+  /**
+   * One path for every payroll command.
+   *
+   * The control room, the command palette and the keyboard shortcut all call
+   * the same store command, which calls the same server endpoint. There is no
+   * second, local compute that could disagree with this one.
+   */
+  const run = async (key: string, fn: () => Promise<ActionResult<unknown>>) => {
     if (busy) return;
     setBusy(key);
-    const r = fn();
+    const result = await fn();
     setBusy(null);
-    toast.result(r);
-    setConfirm(null);
-  };
-
-  const runServer = async (key: string, task: () => Promise<unknown>, message: string) => {
-    if (busy) return;
-    setBusy(key);
-    try {
-      await task();
-      hydrateFromServer(await refreshBootstrap());
-      bootstrapPayroll();
-      toast.success(message);
-      setConfirm(null);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'The server could not complete this payroll action.',
-      );
-    } finally {
-      setBusy(null);
-    }
+    toast.result(result);
+    if (result.ok) setConfirm(null);
   };
 
   return (
@@ -133,16 +125,7 @@ export function PayrollPage() {
             <Button
               size="sm"
               icon={CalendarPlus}
-              onClick={() => {
-                const r = createPayrunFromPrevious();
-                if (r.ok) {
-                  toast.success(
-                    `${r.message} — ${r.value.added.length} added, ${r.value.removed.length} removed`,
-                  );
-                } else {
-                  toast.error(r.error);
-                }
-              }}
+              onClick={() => void run('clone', createPayrunFromPrevious)}
             >
               New period from last
             </Button>
@@ -361,13 +344,7 @@ export function PayrollPage() {
         {can(role, 'payrun.compute') && (
           <Button
             icon={RefreshCw}
-            onClick={() =>
-              void runServer(
-                'compute',
-                () => computePayrun(payrun.id),
-                'Payroll computed from current server inputs',
-              )
-            }
+            onClick={() => void run('compute', computeActivePayrun)}
             pending={busy === 'compute'}
             disabled={payrun.status === 'VALIDATED' || payrun.status === 'PAID'}
             title={
@@ -384,7 +361,9 @@ export function PayrollPage() {
           <Button
             icon={payrun.isFrozen ? LockOpen : Lock}
             onClick={() =>
-              run('freeze', () => setPayrunFrozen(!payrun.isFrozen, 'Operator unfroze the period'))
+              void run('freeze', () =>
+                setPayrunFrozen(!payrun.isFrozen, 'Input cutoff toggled by an operator.'),
+              )
             }
             pending={busy === 'freeze'}
           >
@@ -451,13 +430,7 @@ export function PayrollPage() {
       <ConfirmDialog
         open={confirm === 'validate'}
         onClose={() => setConfirm(null)}
-        onConfirm={() =>
-          void runServer(
-            'validate',
-            () => validatePayrun(payrun.id),
-            'Payroll validated and evidence recorded',
-          )
-        }
+        onConfirm={() => void run('validate', validateActivePayrun)}
         title={`Validate ${monthLabel(payrun.periodStart)} payroll`}
         confirmLabel="Validate payroll"
         variant="primary"
@@ -480,9 +453,7 @@ export function PayrollPage() {
       <ConfirmDialog
         open={confirm === 'pay'}
         onClose={() => setConfirm(null)}
-        onConfirm={() =>
-          void runServer('pay', () => markPayrunPaid(payrun.id), 'Payroll marked paid and frozen')
-        }
+        onConfirm={() => void run('pay', markActivePayrunPaid)}
         title={`Mark ${monthLabel(payrun.periodStart)} payroll paid`}
         confirmLabel="Mark paid"
         variant="success"
@@ -501,7 +472,7 @@ export function PayrollPage() {
       <ConfirmDialog
         open={confirm === 'send'}
         onClose={() => setConfirm(null)}
-        onConfirm={() => run('send', () => sendPayslips(payrun.id))}
+        onConfirm={() => void run('send', () => sendPayslips(payrun.id))}
         title="Send payslips"
         confirmLabel={`Send ${totals.count} payslips`}
         variant="primary"
@@ -529,8 +500,8 @@ export function PayrollPage() {
             <Button onClick={() => setReopen(false)}>Cancel</Button>
             <Button
               variant="danger"
-              onClick={() => {
-                const r = reopenPayrun(reopenReason);
+              onClick={async () => {
+                const r = await reopenPayrun(reopenReason);
                 toast.result(r);
                 if (r.ok) {
                   setReopen(false);

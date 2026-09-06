@@ -41,7 +41,7 @@ export function DocumentsPage() {
     { key: 'ack', header: 'Acknowledgement', render: (d) => <Chip tone={d.acknowledgedAt ? 'success' : 'warning'}>{d.acknowledgedAt ? 'Acknowledged' : 'Pending'}</Chip> },
     { key: 'actions', header: '', align: 'right', render: (d) => <div className="row"><Button size="sm" icon={Download} onClick={() => openDocument(d)}>Download</Button>{role === 'EMPLOYEE' && d.employeeId === me?.id && !d.acknowledgedAt && <Button size="sm" variant="success" icon={Check} onClick={() => toast.result(acknowledgeDocument(d.id))}>Acknowledge</Button>}</div> },
   ];
-  const create = () => { const result = generateDocument(employeeId, kind); toast.result(result); if (result.ok) setGenerateOpen(false); };
+  const create = async () => { const result = await generateDocument(employeeId, kind); toast.result(result); if (result.ok) setGenerateOpen(false); };
   return (
     <Page title={role === 'EMPLOYEE' ? 'My Documents' : 'Documents'} crumbs={['People', 'Documents']} actions={can(role, 'document.write') && <Button variant="primary" icon={Plus} onClick={() => setGenerateOpen(true)}>Generate document</Button>}>
       <Card padding="tight"><div className="filters"><SearchBox value={query} onChange={setQuery} placeholder="Search documents" /><Select value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: 'ALL', label: 'All categories' }, ...Array.from(new Set(state.documents.map((d) => d.category))).map((c) => ({ value: c, label: c }))]} /></div></Card>

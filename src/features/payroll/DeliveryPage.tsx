@@ -1,40 +1,73 @@
 /**
- * Payslip delivery and the persisted outbox.
+ * Payslip delivery and the simulated payout run.
  *
- * Delivery is a state machine that runs beside payroll, never through it:
- * a failed email is recorded here and cannot change a computed amount.
+ * Two integrations are deliberately faked at the boundary and completely real
+ * inside the product. Nothing here sends mail and nothing here moves money —
+ * every screen on this page says so — but the outbox, the payment batch, the
+ * failure reasons and the retry counts are persisted rows: they survive a
+ * refresh, they respect RBAC, and an employee sees the state of their own
+ * payslip without seeing anybody else's.
+ *
+ * Delivery runs beside payroll, never through it: a failed message is recorded
+ * here and can never change a computed amount.
  */
 import { useMemo, useState } from 'react';
-import { Download, Inbox, Mail, RotateCw, Send, TriangleAlert } from 'lucide-react';
+import { Banknote, Download, Inbox, Mail, RotateCw, Send, TriangleAlert } from 'lucide-react';
 import { formatMoney, money, addMoney, toMoneyString } from '@shared/money';
 import { formatDateTime, monthLabel } from '@shared/dates';
 import { useStore } from '@/store/store';
 import { activePayrun, empById, payslipsOf } from '@/store/selectors';
-import { retryDelivery, sendPayslips } from '@/store/actions';
+import { retryDelivery, retryDemoPayment, runDemoPaymentBatch, sendPayslips } from '@/store/actions';
 import { Page } from '@/app/Page';
 import { Avatar, Banner, Button, Card, Chip, EmptyState, Metric } from '@/ui/primitives';
 import { DataTable, type Column } from '@/ui/table';
 import { useToast } from '@/ui/toast';
 import { downloadCsv } from '@/lib/export';
+import type { DemoPaymentBatchView } from '@/store/state';
 import type { OutboxMessage, Payslip } from '@shared/types';
+
+type PaymentItem = DemoPaymentBatchView['items'][number] & { reference: string };
+
+const deliveryChip = (status: Payslip['delivery']) =>
+  status === 'SENT' ? (
+    <Chip tone="success" dot>
+      Sent (simulated)
+    </Chip>
+  ) : status === 'FAILED' ? (
+    <Chip tone="danger" dot>
+      Failed (simulated)
+    </Chip>
+  ) : (
+    <Chip tone="neutral" dot>
+      Not sent
+    </Chip>
+  );
 
 export function DeliveryPage() {
   const state = useStore();
   const toast = useToast();
   const payrun = activePayrun(state);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'send' | 'pay' | null>(null);
 
-  const slips = useMemo(
-    () => payslipsOf(state, payrun.id).filter((p) => !p.isDuplicate),
-    [state, payrun.id],
-  );
+  const slips = useMemo(() => payslipsOf(state, payrun.id), [state, payrun.id]);
   const messages = useMemo(
     () => state.outbox.filter((m) => slips.some((s) => s.id === m.payslipId)),
     [state.outbox, slips],
   );
+  const batches = useMemo(
+    () => state.demoPayments.filter((batch) => batch.payrunId === payrun.id),
+    [state.demoPayments, payrun.id],
+  );
+  const paymentItems = useMemo<PaymentItem[]>(
+    () => batches.flatMap((batch) => batch.items.map((item) => ({ ...item, reference: batch.reference }))),
+    [batches],
+  );
 
   const sent = slips.filter((s) => s.delivery === 'SENT').length;
   const failed = slips.filter((s) => s.delivery === 'FAILED').length;
+  const settled = paymentItems.filter((item) => item.status === 'SIMULATED_SUCCESS').length;
+  const rejected = paymentItems.filter((item) => item.status === 'SIMULATED_FAILURE').length;
+  const decided = payrun.status === 'VALIDATED' || payrun.status === 'PAID';
 
   const netTotal = toMoneyString(slips.reduce((acc, s) => addMoney(acc, s.net), money(0)));
   const payable = slips.filter((s) => empById(state, s.employeeId)?.bank?.verifiedAt);
@@ -70,26 +103,13 @@ export function DeliveryPage() {
       key: 'status',
       header: 'Delivery',
       sortValue: (p) => p.delivery,
-      render: (p) =>
-        p.delivery === 'SENT' ? (
-          <Chip tone="success" dot>
-            Sent
-          </Chip>
-        ) : p.delivery === 'FAILED' ? (
-          <Chip tone="danger" dot>
-            Failed
-          </Chip>
-        ) : (
-          <Chip tone="neutral" dot>
-            Not sent
-          </Chip>
-        ),
+      render: (p) => deliveryChip(p.delivery),
     },
     {
       key: 'when',
       header: 'When',
       secondary: true,
-      render: (p) => (p.deliveredAt ? formatDateTime(p.deliveredAt) : p.deliveryError ?? '—'),
+      render: (p) => (p.deliveredAt ? formatDateTime(p.deliveredAt) : (p.deliveryError ?? '—')),
     },
   ];
 
@@ -100,13 +120,17 @@ export function DeliveryPage() {
       key: 'status',
       header: 'Status',
       render: (m) =>
-        m.status === 'SENT' ? (
+        m.status === 'SIMULATED_SENT' ? (
           <Chip tone="success" dot>
-            Sent
+            Sent (simulated)
+          </Chip>
+        ) : m.status === 'QUEUED' ? (
+          <Chip tone="neutral" dot>
+            Queued
           </Chip>
         ) : (
           <Chip tone="danger" dot>
-            Failed
+            Failed (simulated)
           </Chip>
         ),
     },
@@ -114,15 +138,84 @@ export function DeliveryPage() {
       key: 'error',
       header: 'Detail',
       secondary: true,
-      render: (m) => <span className="muted">{m.error ?? formatDateTime(m.sentAt ?? m.createdAt)}</span>,
+      render: (m) => (
+        <span className="muted">{m.error ?? formatDateTime(m.sentAt ?? m.createdAt)}</span>
+      ),
     },
     {
       key: 'actions',
       header: '',
       align: 'right',
       render: (m) =>
-        m.status === 'FAILED' ? (
+        m.status === 'SIMULATED_FAILED' ? (
           <Button size="sm" icon={RotateCw} onClick={() => toast.result(retryDelivery(m.id))}>
+            Retry
+          </Button>
+        ) : null,
+    },
+  ];
+
+  const paymentColumns: Column<PaymentItem>[] = [
+    {
+      key: 'employee',
+      header: 'Employee',
+      sortValue: (item) => empById(state, item.employeeId)?.fullName ?? '',
+      render: (item) => {
+        const e = empById(state, item.employeeId);
+        return (
+          <span className="person">
+            <Avatar initials={e?.initials ?? '??'} size="sm" />
+            <span className="truncate">
+              <span className="person-name">{e?.fullName ?? item.employeeId}</span>
+              <span className="person-meta mono">{item.accountMasked}</span>
+            </span>
+          </span>
+        );
+      },
+    },
+    { key: 'reference', header: 'Batch', secondary: true, render: (item) => <span className="mono">{item.reference}</span> },
+    {
+      key: 'amount',
+      header: 'Amount',
+      align: 'right',
+      sortValue: (item) => money(item.amount).toNumber(),
+      render: (item) => formatMoney(item.amount),
+    },
+    {
+      key: 'status',
+      header: 'Outcome',
+      render: (item) =>
+        item.status === 'SIMULATED_SUCCESS' ? (
+          <Chip tone="success" dot>
+            Settled (simulated)
+          </Chip>
+        ) : item.status === 'QUEUED' ? (
+          <Chip tone="neutral" dot>
+            Queued
+          </Chip>
+        ) : (
+          <Chip tone="danger" dot>
+            Rejected (simulated)
+          </Chip>
+        ),
+    },
+    {
+      key: 'detail',
+      header: 'Detail',
+      secondary: true,
+      render: (item) => (
+        <span className="muted">
+          {item.failureReason ?? (item.retryCount > 0 ? `Settled after ${item.retryCount} retry` : '—')}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (item) =>
+        item.status === 'SIMULATED_FAILURE' ? (
+          <Button size="sm" icon={RotateCw} onClick={() => toast.result(retryDemoPayment(item.id))}>
             Retry
           </Button>
         ) : null,
@@ -135,58 +228,85 @@ export function DeliveryPage() {
       return {
         employee_code: e.employeeCode,
         account_name: e.bank!.accountName,
-        account_number: e.bank!.accountNumberMasked,
+        account_number_masked: e.bank!.accountNumberMasked,
         ifsc: e.bank!.ifsc,
         amount: s.net,
-        reference: `${s.payslipRef}`,
+        reference: s.payslipRef,
       };
     });
     const total = toMoneyString(payable.reduce((acc, s) => addMoney(acc, s.net), money(0)));
-    downloadCsv(`bank-advice-${payrun.periodStart.slice(0, 7)}.csv`, rows, [
-      `# PeoplePay360 bank advice · ${monthLabel(payrun.periodStart)}`,
+    downloadCsv(`demo-bank-advice-${payrun.periodStart.slice(0, 7)}.csv`, rows, [
+      `# PeoplePay360 DEMO bank advice · ${monthLabel(payrun.periodStart)}`,
+      '# Masked account details only. This file cannot be used to transfer money.',
       `# rows=${rows.length} total=${total}`,
     ]);
-    toast.success(`Bank advice exported — ${rows.length} rows, ${formatMoney(total)}`);
+    toast.success(`Demo bank advice exported — ${rows.length} rows, masked account details only`);
   };
 
   return (
-    <Page title="Payslip delivery" crumbs={['Payroll', 'Delivery']}>
-      {payrun.status !== 'VALIDATED' && payrun.status !== 'PAID' ? (
+    <Page title="Delivery and payout" crumbs={['Payroll', 'Delivery']}>
+      <Banner tone="info" icon={Mail} title="Both integrations on this page are simulated">
+        No email is sent and no money is transferred. The queue, the statuses, the failure reasons
+        and the retries are real persisted records, so the workflow behaves exactly as it would
+        against a live provider.
+      </Banner>
+
+      {!decided ? (
         <Banner tone="info" icon={Mail} title="Delivery opens after validation">
-          {monthLabel(payrun.periodStart)} is {payrun.status.toLowerCase()}. Payslips can be sent once
-          the payrun is validated.
+          {monthLabel(payrun.periodStart)} is {payrun.status.toLowerCase()}. Payslips can be sent and
+          the payout simulated once the payroll run is validated.
         </Banner>
-      ) : failed > 0 ? (
-        <Banner tone="danger" icon={TriangleAlert} title={`${failed} deliveries failed`}>
-          Payroll amounts are unaffected — the computed net for every employee is unchanged. Fix the
-          email address on the employee record, then retry from the outbox below.
+      ) : failed > 0 || rejected > 0 ? (
+        <Banner
+          tone="danger"
+          icon={TriangleAlert}
+          title={`${failed} deliveries and ${rejected} payments failed in the simulation`}
+        >
+          Payroll amounts are unaffected — the computed net for every employee is unchanged. Retry
+          the individual rows below; each retry is recorded against the same persisted record.
         </Banner>
       ) : null}
 
       <div className="grid grid-4">
         <Metric label="Payslips" value={slips.length} />
-        <Metric label="Sent" value={sent} tone="success" />
-        <Metric label="Failed" value={failed} tone={failed > 0 ? 'danger' : undefined} />
-        <Metric label="Net payroll" value={formatMoney(netTotal)} tone="brand" sub="Unchanged by delivery" />
+        <Metric label="Delivered (simulated)" value={sent} tone="success" />
+        <Metric label="Settled (simulated)" value={settled} tone={settled > 0 ? 'success' : undefined} />
+        <Metric
+          label="Net payroll"
+          value={formatMoney(netTotal)}
+          tone="brand"
+          sub="Unchanged by delivery or payout"
+        />
       </div>
 
       <div className="row gap2 wrap">
         <Button
           variant="primary"
           icon={Send}
-          pending={busy}
-          disabled={payrun.status !== 'VALIDATED' && payrun.status !== 'PAID'}
-          onClick={() => {
-            setBusy(true);
-            const r = sendPayslips(payrun.id);
-            setBusy(false);
-            toast.result(r);
+          pending={busy === 'send'}
+          disabled={!decided}
+          onClick={async () => {
+            setBusy('send');
+            toast.result(await sendPayslips(payrun.id));
+            setBusy(null);
           }}
         >
           {sent > 0 ? 'Resend all payslips' : 'Send all payslips'}
         </Button>
+        <Button
+          icon={Banknote}
+          pending={busy === 'pay'}
+          disabled={!decided}
+          onClick={async () => {
+            setBusy('pay');
+            toast.result(await runDemoPaymentBatch(payrun.id));
+            setBusy(null);
+          }}
+        >
+          Run demo payment batch
+        </Button>
         <Button icon={Download} onClick={exportBankAdvice} disabled={payable.length === 0}>
-          Export bank advice ({payable.length})
+          Export demo bank advice ({payable.length})
         </Button>
         {unbanked.length > 0 && (
           <Chip tone="warning" icon={TriangleAlert}>
@@ -202,7 +322,9 @@ export function DeliveryPage() {
           rowKey={(p) => p.id}
           pageSize={12}
           caption="Payslip delivery status"
-          empty={<EmptyState icon={Inbox} title="No payslips yet" description="Compute the payrun first." />}
+          empty={
+            <EmptyState icon={Inbox} title="No payslips yet" description="Compute the payroll run first." />
+          }
           mobileCard={(p) => {
             const e = empById(state, p.employeeId);
             return (
@@ -212,19 +334,7 @@ export function DeliveryPage() {
                     <Avatar initials={e?.initials ?? '??'} size="sm" />
                     <span className="person-name">{e?.fullName}</span>
                   </span>
-                  {p.delivery === 'SENT' ? (
-                    <Chip tone="success" dot>
-                      Sent
-                    </Chip>
-                  ) : p.delivery === 'FAILED' ? (
-                    <Chip tone="danger" dot>
-                      Failed
-                    </Chip>
-                  ) : (
-                    <Chip tone="neutral" dot>
-                      Not sent
-                    </Chip>
-                  )}
+                  {deliveryChip(p.delivery)}
                 </div>
                 <dl className="reccard-kv">
                   <dt>Net</dt>
@@ -239,8 +349,28 @@ export function DeliveryPage() {
       </Card>
 
       <Card
-        title="Outbox"
-        subtitle="Persisted locally, so the demo works with no mail server and nothing is silently lost"
+        title="Demo payment simulation"
+        subtitle="No money is transferred. Outcomes are deterministic, so the same run always produces the same rejections — and a retry resolves them."
+        padding="flush"
+      >
+        <DataTable
+          rows={paymentItems}
+          columns={paymentColumns}
+          rowKey={(item) => item.id}
+          pageSize={8}
+          empty={
+            <EmptyState
+              icon={Banknote}
+              title="No payment batch yet"
+              description="Run the demo payment batch once the payroll run is validated."
+            />
+          }
+        />
+      </Card>
+
+      <Card
+        title="Demo email outbox"
+        subtitle="No email was sent. Every queued message, failure reason and retry is stored, so nothing is silently lost."
         padding="flush"
       >
         <DataTable

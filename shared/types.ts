@@ -132,6 +132,8 @@ export interface ProfileChangeRequest {
   decidedById: string | null;
   decidedAt: string | null;
   decisionNote: string | null;
+  /** Optimistic concurrency token: two approvers cannot both decide this. */
+  version: number;
 }
 
 export const DOCUMENT_CATEGORIES = [
@@ -419,7 +421,6 @@ export const EXCEPTION_KINDS = [
   'NO_CONTRACT',
   'AMBIGUOUS_CONTRACT',
   'MISSING_CHECKOUT',
-  'DUPLICATE_PAYSLIP',
   'INVALID_RULE',
   'NEGATIVE_NET',
   'ONBOARDING_INCOMPLETE',
@@ -444,7 +445,7 @@ export interface PayrollException {
   title: string;
   detail: string;
   /** How to fix it — drives the resolve surface. */
-  resolution: 'BANK_DETAILS' | 'ATTENDANCE_CHECKOUT' | 'REMOVE_DUPLICATE' | 'CONTRACT' | 'REVIEW';
+  resolution: 'BANK_DETAILS' | 'ATTENDANCE_CHECKOUT' | 'CONTRACT' | 'REVIEW';
   refId: string | null;
 }
 
@@ -491,17 +492,26 @@ export interface AppNotification {
   roles: Role[];
 }
 
+/**
+ * One queued message in the simulated outbox.
+ *
+ * The status names say what actually happened: the record was written and the
+ * workflow ran, but no transport was involved. Nothing in the product may
+ * present `SIMULATED_SENT` as proof that a person received an email.
+ */
 export interface OutboxMessage {
   id: string;
   to: string;
   subject: string;
   body: string;
   attachmentName: string | null;
-  status: 'QUEUED' | 'SENT' | 'FAILED';
+  status: 'QUEUED' | 'SIMULATED_SENT' | 'SIMULATED_FAILED';
   error: string | null;
   createdAt: string;
   sentAt: string | null;
   payslipId: string | null;
+  attempts: number;
+  simulated: true;
 }
 
 export interface AppSettings {
@@ -557,4 +567,6 @@ export interface SalaryChangeRequest {
   decidedById: string | null;
   decidedAt: string | null;
   createdAt: string;
+  /** Optimistic concurrency token: two approvers cannot both decide this. */
+  version: number;
 }

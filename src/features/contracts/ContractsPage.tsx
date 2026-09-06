@@ -331,12 +331,13 @@ function ContractDialog({
   const set = (patch: Partial<ContractInput>) => setForm((f) => ({ ...f, ...patch }));
   const err = (f: string) => (error?.field === f ? error.message : undefined);
 
-  const submit = () => {
+  const submit = async () => {
+    if (pending) return;
     setPending(true);
-    const r = contract ? updateContract(contract.id, form) : createContract(form);
+    const r = await (contract ? updateContract(contract.id, form) : createContract(form));
     setPending(false);
     if (!r.ok) {
-      setError({ field: r.field, message: r.error });
+      setError({ field: r.field, message: r.recovery ? `${r.error} ${r.recovery}` : r.error });
       return;
     }
     toast.success(r.message);
@@ -471,10 +472,10 @@ function TerminateDialog({ contract, onClose }: { contract: Contract; onClose: (
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="danger"
-            onClick={() => {
-              const r = terminateContract(contract.id, endDate, reason);
+            onClick={async () => {
+              const r = await terminateContract(contract.id, endDate, reason);
               if (!r.ok) {
-                setError({ field: r.field, message: r.error });
+                setError({ field: r.field, message: r.recovery ? `${r.error} ${r.recovery}` : r.error });
                 return;
               }
               toast.success(r.message);

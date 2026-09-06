@@ -323,9 +323,9 @@ export function TimeOffPage() {
             <Button onClick={() => setRefusing(null)}>Cancel</Button>
             <Button
               variant="danger"
-              onClick={() => {
+              onClick={async () => {
                 if (!refusing) return;
-                const r = decideLeave(refusing.id, 'REFUSED', note);
+                const r = await decideLeave(refusing.id, 'REFUSED', note);
                 toast.result(r);
                 if (r.ok) {
                   setRefusing(null);

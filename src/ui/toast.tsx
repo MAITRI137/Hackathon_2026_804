@@ -16,6 +16,13 @@ import { AlertTriangle, Check, Info, XCircle } from 'lucide-react';
 
 export type ToastKind = 'info' | 'success' | 'error' | 'warning';
 
+interface CommandResult {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  recovery?: string;
+}
+
 interface Toast {
   id: number;
   kind: ToastKind;
@@ -27,8 +34,14 @@ interface ToastApi {
   show: (message: string, kind?: ToastKind, undo?: () => void) => void;
   success: (message: string, undo?: () => void) => void;
   error: (message: string) => void;
-  /** Convenience for action results: shows the right tone automatically. */
-  result: (r: { ok: boolean; message?: string; error?: string }, undo?: () => void) => void;
+  /**
+   * Convenience for command results: shows the right tone automatically.
+   *
+   * Commands are server round trips, so this accepts the promise directly and
+   * every call site stays a one-liner. A rejected promise is still reported —
+   * silence after a click is the one outcome a control must never have.
+   */
+  result: (r: CommandResult | Promise<CommandResult>, undo?: () => void) => void;
 }
 
 const Ctx = createContext<ToastApi | null>(null);
@@ -59,10 +72,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       show,
       success: (m, undo) => show(m, 'success', undo),
       error: (m) => show(m, 'error'),
-      result: (r, undo) =>
-        r.ok
-          ? show(r.message ?? 'Done', 'success', undo)
-          : show(r.error ?? 'Something went wrong', 'error'),
+      result: (r, undo) => {
+        void Promise.resolve(r)
+          .then((value) =>
+            value.ok
+              ? show(value.message ?? 'Done', 'success', undo)
+              : show(
+                  value.recovery ? `${value.error} ${value.recovery}` : (value.error ?? 'Something went wrong'),
+                  'error',
+                ),
+          )
+          .catch(() => show('The server could not be reached. Nothing was changed.', 'error'));
+      },
     }),
     [show],
   );

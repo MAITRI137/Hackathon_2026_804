@@ -295,13 +295,13 @@ export function notifications(s: AppState): AppNotification[] {
     }
   }
 
-  const failed = s.outbox.filter((m) => m.status === 'FAILED');
+  const failed = s.outbox.filter((m) => m.status === 'SIMULATED_FAILED');
   if (failed.length > 0) {
     push({
       id: `n-delivery-failed-${failed.length}`,
       kind: 'DELIVERY',
       title: `${failed.length} payslip deliver${failed.length === 1 ? 'y' : 'ies'} failed`,
-      body: 'Payroll amounts are unaffected. Retry from the outbox.',
+      body: 'Demo delivery simulation. Payroll amounts are unaffected. Retry from the outbox.',
       severity: 'danger',
       createdAt: s.today,
       link: '/payroll/delivery',
@@ -352,6 +352,22 @@ export function notifications(s: AppState): AppNotification[] {
   }
 
   /* employee-facing */
+  // Notifications the server persisted because somebody else acted. These are
+  // records, not derivations: they carry their own read state and stay
+  // addressed to this person across devices.
+  const stored: AppNotification[] = s.storedNotifications.map((item) => ({
+    id: item.id,
+    kind: item.kind,
+    title: item.title,
+    body: item.body,
+    severity: item.severity === 'CRITICAL' ? 'danger' : item.severity === 'WARNING' ? 'warning' : 'info',
+    createdAt: item.createdAt,
+    readAt: item.readAt,
+    link: null,
+    roles: [role],
+  }));
+  out.unshift(...stored);
+
   const me = currentEmployee(s);
   if (me && role === 'EMPLOYEE') {
     const mine = s.leaveRequests.filter((r) => r.employeeId === me.id && r.status === 'PENDING');

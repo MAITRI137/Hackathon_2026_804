@@ -27,9 +27,9 @@ export function SalaryConfigPage() {
     setEditing(rule);
     setValue(rule.type === 'FIXED' ? rule.amount ?? '' : rule.type === 'PERCENTAGE' ? rule.percentage ?? '' : rule.formula ?? '');
   };
-  const save = () => {
+  const save = async () => {
     if (!editing) return;
-    const result = updateSalaryRule(editing.id, editing.type === 'FIXED' ? { amount: value } : editing.type === 'PERCENTAGE' ? { percentage: value } : { formula: value });
+    const result = await updateSalaryRule(editing.id, editing.type === 'FIXED' ? { amount: value } : editing.type === 'PERCENTAGE' ? { percentage: value } : { formula: value });
     toast.result(result);
     if (result.ok) setEditing(null);
   };

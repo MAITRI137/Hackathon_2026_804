@@ -171,12 +171,12 @@ export function EmployeesPage() {
     },
   ];
 
-  const runBatch = () => {
+  const runBatch = async () => {
     const ids = [...selected];
     let result;
-    if (batch === 'schedule') result = batchAssignSchedule(ids, batchValue);
-    else if (batch === 'structure') result = batchAssignStructure(ids, batchValue);
-    else if (batch === 'payrun') result = batchAddToPayrun(ids);
+    if (batch === 'schedule') result = await batchAssignSchedule(ids, batchValue);
+    else if (batch === 'structure') result = await batchAssignStructure(ids, batchValue);
+    else if (batch === 'payrun') result = await batchAddToPayrun(ids);
     else if (batch === 'export') {
       downloadCsv(
         'employees.csv',
@@ -505,16 +505,15 @@ function KanbanBoard({
               setOver(d.id);
             }}
             onDragLeave={() => setOver((o) => (o === d.id ? null : o))}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               e.preventDefault();
               setOver(null);
               if (!dragging || !canEdit) return;
-              const r = moveEmployeeToDepartment(dragging, d.id);
-              if (r.ok && r.message) {
-                toast.success(`${r.message} to ${d.name}`);
-                onMoved(dragging);
-              }
+              const moved = dragging;
               setDragging(null);
+              const r = await moveEmployeeToDepartment(moved, d.id);
+              toast.result(r);
+              if (r.ok) onMoved(moved);
             }}
           >
             <header className="kanban-h">

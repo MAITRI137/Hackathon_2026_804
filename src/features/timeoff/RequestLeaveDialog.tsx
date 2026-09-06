@@ -53,9 +53,10 @@ export function RequestLeaveDialog({ open, onClose }: { open: boolean; onClose: 
     );
   }, [state, target, fromDate, toDate]);
 
-  const submit = () => {
+  const submit = async () => {
+    if (pending) return;
     setPending(true);
-    const result = requestLeave({
+    const result = await requestLeave({
       employeeId: target,
       leaveTypeId,
       fromDate,
@@ -66,7 +67,7 @@ export function RequestLeaveDialog({ open, onClose }: { open: boolean; onClose: 
     });
     setPending(false);
     if (!result.ok) {
-      setError({ field: result.field, message: result.error });
+      setError({ field: result.field, message: result.recovery ? `${result.error} ${result.recovery}` : result.error });
       return;
     }
     toast.success(result.message);

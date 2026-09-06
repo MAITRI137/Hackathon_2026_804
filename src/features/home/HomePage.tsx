@@ -554,11 +554,10 @@ function EmployeeHome() {
                 variant="danger"
                 icon={LogOut}
                 pending={busy}
-                onClick={() => {
+                onClick={async () => {
                   setBusy(true);
-                  const r = checkOut(me.id);
+                  toast.result(await checkOut());
                   setBusy(false);
-                  toast.result(r);
                 }}
               >
                 Check out
@@ -570,11 +569,10 @@ function EmployeeHome() {
                 pending={busy}
                 disabled={Boolean(todayRecord?.checkOut)}
                 title={todayRecord?.checkOut ? 'You have already completed today' : undefined}
-                onClick={() => {
+                onClick={async () => {
                   setBusy(true);
-                  const r = checkIn(me.id);
+                  toast.result(await checkIn());
                   setBusy(false);
-                  toast.result(r);
                 }}
               >
                 Check in

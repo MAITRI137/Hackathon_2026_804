@@ -1010,9 +1010,6 @@ export const payruns: Payrun[] = [
 
 export const ACTIVE_PAYRUN_ID = 'PR-2026-09';
 
-/** Dev Patel carries a seeded duplicate payslip in the September run. */
-export const DUPLICATE_PAYSLIP_EMPLOYEE = 'EMP-005';
-
 /* ── documents, checklists, requests ───────────────────────── */
 
 export const documents: EmployeeDocument[] = [
@@ -1164,6 +1161,7 @@ export const profileChangeRequests: ProfileChangeRequest[] = [
     decidedById: null,
     decidedAt: null,
     decisionNote: null,
+    version: 1,
   },
   {
     id: 'PRQ-2',
@@ -1176,6 +1174,7 @@ export const profileChangeRequests: ProfileChangeRequest[] = [
     decidedById: null,
     decidedAt: null,
     decisionNote: null,
+    version: 1,
   },
 ];
 
@@ -1193,6 +1192,7 @@ export const salaryChangeRequests: SalaryChangeRequest[] = [
     decidedById: null,
     decidedAt: null,
     createdAt: '2026-09-02T12:00:00+05:30',
+    version: 1,
   },
 ];
 

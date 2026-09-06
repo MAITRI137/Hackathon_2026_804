@@ -11,29 +11,24 @@ import {
   ArrowRight,
   Banknote,
   CalendarClock,
-  Copy,
   FileWarning,
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
 import type { PayrollException } from '@shared/types';
 import { formatDate, formatDuration, minutesOfDay } from '@shared/dates';
-import { formatMoney } from '@shared/money';
-import { hydrateFromServer, useStore } from '@/store/store';
-import { empById, payslipsOf } from '@/store/selectors';
-import { bootstrapPayroll, cancelDuplicatePayslip } from '@/store/actions';
-import { refreshBootstrap, resolvePayrunAttendance, resolvePayrunBank } from '@/lib/api';
+import { useStore } from '@/store/store';
+import { empById } from '@/store/selectors';
+import { fixMissingCheckout, saveBankDetails } from '@/store/actions';
 import { Avatar, Banner, Button, Chip, InfoGrid } from '@/ui/primitives';
 import { TextArea, TextInput } from '@/ui/form';
 import { Modal } from '@/ui/overlays';
-import { ConsequencePreview } from '@/ui/feedback';
 import { useToast } from '@/ui/toast';
 
 const KIND_ICON = {
   MISSING_BANK: Banknote,
   DUPLICATE_BANK_ACCOUNT: Banknote,
   MISSING_CHECKOUT: CalendarClock,
-  DUPLICATE_PAYSLIP: Copy,
   NO_CONTRACT: FileWarning,
   AMBIGUOUS_CONTRACT: FileWarning,
   INVALID_RULE: ShieldAlert,
@@ -106,8 +101,6 @@ export function ResolveDialog({
       return <BankDetailsDialog exception={exception} onClose={onClose} />;
     case 'ATTENDANCE_CHECKOUT':
       return <CheckoutDialog exception={exception} onClose={onClose} />;
-    case 'REMOVE_DUPLICATE':
-      return <DuplicateDialog exception={exception} onClose={onClose} />;
     default:
       return <ReviewDialog exception={exception} onClose={onClose} />;
   }
@@ -161,19 +154,16 @@ function BankDetailsDialog({
   const [pending, setPending] = useState(false);
 
   const submit = async () => {
-    if (!exception.employeeId) return;
+    if (!exception.employeeId || pending) return;
     setPending(true);
-    try {
-      await resolvePayrunBank(state.activePayrunId, { employeeId: exception.employeeId, ...form });
-      hydrateFromServer(await refreshBootstrap());
-      bootstrapPayroll();
-      toast.success('Bank details verified — the blocker is cleared');
-      onClose();
-    } catch (err) {
-      setError({ message: err instanceof Error ? err.message : 'Could not save bank details.' });
-    } finally {
-      setPending(false);
+    const result = await saveBankDetails(exception.employeeId, form);
+    setPending(false);
+    if (!result.ok) {
+      setError({ field: result.field, message: result.recovery ? `${result.error} ${result.recovery}` : result.error });
+      return;
     }
+    toast.result(result);
+    onClose();
   };
 
   const err = (f: string) => (error?.field === f ? error.message : undefined);
@@ -283,23 +273,16 @@ function CheckoutDialog({
       : 0;
 
   const submit = async () => {
-    if (!record) return;
+    if (!record || pending) return;
     setPending(true);
-    try {
-      await resolvePayrunAttendance(state.activePayrunId, {
-        attendanceId: record.id,
-        checkOut,
-        reason,
-      });
-      hydrateFromServer(await refreshBootstrap());
-      bootstrapPayroll();
-      toast.success('Checkout recorded — worked hours recalculated');
-      onClose();
-    } catch (err) {
-      setError({ message: err instanceof Error ? err.message : 'Could not save the correction.' });
-    } finally {
-      setPending(false);
+    const result = await fixMissingCheckout(record.id, checkOut, reason);
+    setPending(false);
+    if (!result.ok) {
+      setError({ field: result.field, message: result.recovery ? `${result.error} ${result.recovery}` : result.error });
+      return;
     }
+    toast.result(result);
+    onClose();
   };
 
   if (!record) {
@@ -388,104 +371,6 @@ function CheckoutDialog({
           The correction is recorded against your name in the audit trail and shown on the
           attendance row.
         </p>
-      </div>
-    </Modal>
-  );
-}
-
-function DuplicateDialog({
-  exception,
-  onClose,
-}: {
-  exception: PayrollException;
-  onClose: () => void;
-}) {
-  const toast = useToast();
-  const state = useStore();
-  const emp = empById(state, exception.employeeId);
-  const slips = payslipsOf(state, state.activePayrunId).filter(
-    (p) => p.employeeId === exception.employeeId,
-  );
-  const [selected, setSelected] = useState(
-    exception.refId ?? slips.find((s) => s.isDuplicate)?.id ?? '',
-  );
-  const [pending, setPending] = useState(false);
-
-  const submit = () => {
-    setPending(true);
-    const r = cancelDuplicatePayslip(selected);
-    setPending(false);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
-    }
-    toast.success('Duplicate payslip removed');
-    onClose();
-  };
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      eyebrow="Resolve exception"
-      title="Remove the duplicate payslip"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" onClick={submit} pending={pending} disabled={!selected}>
-            Remove selected payslip
-          </Button>
-        </>
-      }
-    >
-      <Header exception={exception} />
-      <div className="col gap3">
-        <p className="secondary" style={{ fontSize: 'var(--fs-sm)' }}>
-          {slips.length} payslips exist for {emp?.fullName} in this period. Keep the original and
-          remove the duplicate — totals recalculate immediately.
-        </p>
-        {slips.map((s) => (
-          <label
-            key={s.id}
-            className="check radio"
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r)',
-              padding: 'var(--s3)',
-              alignItems: 'flex-start',
-              background: selected === s.id ? 'var(--danger-bg)' : 'var(--surface)',
-            }}
-          >
-            <input
-              type="radio"
-              name="dup"
-              checked={selected === s.id}
-              onChange={() => setSelected(s.id)}
-            />
-            <span className="box" aria-hidden />
-            <span className="grow">
-              <span className="row between wrap">
-                <b className="mono">{s.payslipRef}</b>
-                <span className="mono">{formatMoney(s.net)}</span>
-              </span>
-              <span className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
-                Computed {formatDate(s.computedAt.slice(0, 10))}
-                {s.isDuplicate ? ' · flagged as duplicate' : ' · original'}
-              </span>
-            </span>
-          </label>
-        ))}
-        <ConsequencePreview
-          rows={[
-            {
-              label: 'Payslips for this employee',
-              before: String(slips.length),
-              after: String(Math.max(0, slips.length - 1)),
-              delta: { text: '−1', positive: true },
-            },
-          ]}
-          note="Removing a duplicate does not change any computed amount on the remaining payslip."
-        />
       </div>
     </Modal>
   );

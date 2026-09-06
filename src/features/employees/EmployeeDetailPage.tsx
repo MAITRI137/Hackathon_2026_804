@@ -421,16 +421,20 @@ export function EmployeeDetailPage() {
       <ConfirmDialog
         open={archiving}
         onClose={() => setArchiving(false)}
-        onConfirm={() => {
-          const r = archiveEmployee(employee.id);
+        onConfirm={async () => {
+          const previous = employee.status;
+          const r = await archiveEmployee(employee.id);
           setArchiving(false);
-          if (r.ok) {
-            const previous = employee.status;
-            toast.show(r.message, 'success', () => {
-              restoreEmployee(employee.id, previous);
-            });
-            navigate('/employees');
+          if (!r.ok) {
+            toast.result(r);
+            return;
           }
+          // Undo is offered because the server can genuinely reverse this: the
+          // restore is another audited command, not a rollback of local state.
+          toast.show(r.message, 'success', () => {
+            void restoreEmployee(employee.id, previous).then(toast.result);
+          });
+          navigate('/employees');
         }}
         title={`Archive ${employee.fullName}`}
         confirmLabel="Archive employee"

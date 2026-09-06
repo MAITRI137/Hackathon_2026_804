@@ -25,15 +25,19 @@ export function ApprovalsPage() {
     return `${employee?.fullName} ${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
   }), [state, query]);
 
-  const decide = (decision: 'APPROVED' | 'REFUSED') => {
-    if (!active) return;
-    const result = active.type === 'LEAVE'
+  const [pending, setPending] = useState(false);
+
+  const decide = async (decision: 'APPROVED' | 'REFUSED') => {
+    if (!active || pending) return;
+    setPending(true);
+    const result = await (active.type === 'LEAVE'
       ? decideLeave(active.refId, decision, note)
       : active.type === 'PROFILE'
         ? decideProfileChange(active.refId, decision, note)
-        : decideSalaryChange(active.refId, decision, note);
+        : decideSalaryChange(active.refId, decision, note));
+    setPending(false);
     if (!result.ok) {
-      setError(result.error);
+      setError(result.recovery ? `${result.error} ${result.recovery}` : result.error);
       return;
     }
     toast.result(result);

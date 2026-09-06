@@ -58,9 +58,10 @@ export function AddEmployeeDialog({
     setError((e) => (e && patch[e.field as keyof NewEmployeeInput] !== undefined ? null : e));
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (pending) return;
     setPending(true);
-    const result = createEmployee(value);
+    const result = await createEmployee(value);
     setPending(false);
     if (!result.ok) {
       setError({ field: result.field, message: result.error });
